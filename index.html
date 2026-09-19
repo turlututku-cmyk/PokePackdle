@@ -365,8 +365,8 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
   <header>
     <h1 class="logo">POKE<span>PACKDLE</span></h1>
     <div class="tabs" role="tablist" aria-label="Game mode">
-      <button class="tab" role="tab" id="tabDaily" aria-selected="true">Daily</button>
-      <button class="tab" role="tab" id="tabFree" aria-selected="false">Free play</button>
+      <button class="tab" role="tab" id="tabDaily" aria-selected="true">Daily pack</button>
+      <button class="tab" role="tab" id="tabFree" aria-selected="false">Unlimited</button>
     </div>
     <button class="iconbtn" id="muteBtn" aria-pressed="false" aria-label="Sound on">Sound on</button>
     <button class="iconbtn admin" id="adminBtn" hidden>Admin</button>
@@ -440,11 +440,11 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
       <button type="button" class="btn ghost" id="auCancel">Cancel</button>
     </div>
   </form>
-  <p class="note" style="margin:16px 0 0;font-size:13px">Accounts live in this browser only. They keep your daily progress and stats separate, but aren't synced between devices.</p>
+  <p class="note" style="margin:16px 0 0;font-size:13px">Accounts live in this browser only. They keep your runs and stats separate, but aren't synced between devices.</p>
 </dialog>
 <dialog id="acctDlg">
   <h2 id="acctName">Player</h2>
-  <p class="note" style="margin-top:0">You're logged in. Your daily progress and stats are saved to this account.</p>
+  <p class="note" style="margin-top:0">You're logged in. Your current run and stats are saved to this account.</p>
   <div class="controls" style="justify-content:flex-start;margin-top:14px">
     <button class="btn" id="logoutBtn">Log out</button>
     <form method="dialog"><button class="btn ghost">Close</button></form>
@@ -467,7 +467,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 
   <div class="lbl" style="margin-top:22px">Tools</div>
   <div class="adm-row">
-    <button type="button" class="btn sm ghost" id="admResetMine">Reset my daily</button>
+    <button type="button" class="btn sm ghost" id="admResetMine">Deal me a new pack</button>
     <button type="button" class="btn sm ghost" id="admExport">Copy all data (JSON)</button>
     <button type="button" class="btn sm ghost danger" id="admWipe">Wipe all game data</button>
   </div>
@@ -700,42 +700,45 @@ const artUrl = (id, shiny) => "https://raw.githubusercontent.com/PokeAPI/sprites
 
 /* ---------- state ---------- */
 const fresh = () => ({pack:0, ripped:false, flipped:Array(PER).fill(false), counted:false});
-let mode = "daily", key = "", dayNo = 1, seed = 0, run = [], st = fresh();
-const persist = () => { if (mode === "daily") store.set(K("day:" + key), st); };
+const todayKey = () => keyOf(new Date());
+let mode = "daily";   /* "daily": one saved pack a day that counts. "free": unlimited practice packs that never count. */
+let seed = 0, run = [], st = fresh(), runDay = todayKey();
+const persist = () => { if (mode === "daily") store.set(K("run"), {seed, st, day:runDay}); };
 
-function startDaily(){
+/* One random pack per account per day. The current run is saved, so refreshing can't reroll cards you've already seen. */
+function startRun(newRun){
   mode = "daily";
-  const now = new Date();
-  key = keyOf(now);
-  dayNo = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(2026,0,1)) / 864e5) + 1;
-  seed = hash("packdle:" + key);
+  const saved = newRun ? null : store.get(K("run"), null), today = todayKey();
+  const ok = saved && saved.st && Number.isFinite(saved.seed);
+  const inProgress = ok && saved.st.ripped && saved.st.pack < PACKS;        /* an opened, unfinished pack always carries on, even past midnight */
+  const doneToday = ok && saved.st.pack >= PACKS && saved.day === today;    /* today's pack is used up until the next day */
+  if (inProgress || doneToday) { seed = saved.seed; st = saved.st; runDay = saved.day || today; }
+  else { seed = (Math.random() * 2**32) >>> 0; st = fresh(); runDay = today; }   /* an untouched sealed pack is simply replaced by a new random one */
   run = genRun(seed);
-  st = store.get(K("day:" + key), null) || fresh();
+  persist();
   setMode();
 }
+/* unlimited practice: a fresh random pack whenever you like, never saved, never counted in stats or on the leaderboard */
 function startFree(){
   mode = "free";
-  seed = (Math.random() * 2**32) >>> 0;
-  run = genRun(seed);
-  st = fresh();
+  seed = (Math.random() * 2**32) >>> 0; st = fresh(); run = genRun(seed);
   setMode();
 }
 function setMode(){
-  $("#tabDaily").setAttribute("aria-selected", mode === "daily");
-  $("#tabFree").setAttribute("aria-selected", mode === "free");
+  $("#tabDaily").setAttribute("aria-selected", mode === "daily"); $("#tabFree").setAttribute("aria-selected", mode === "free");
   $("#blurb").innerHTML = mode === "daily"
-    ? `<b>Daily #${dayNo}.</b> ${PACKS === 1 ? "One pack" : PACKS + " packs"}, ${PER} cards${PACKS > 1 ? " each" : ""}. Every card scores from its HP, attacks, type, weakness, resistance, retreat and card type. Everyone opens the same pack today, so compare your total.`
-    : `<b>Free play.</b> Random packs, no limit. Chase a high-HP VMAX with cheap retreat.`;
+    ? `<b>One random pack a day.</b> ${PER} cards, different every time. Every card scores from its HP, attacks, type, weakness, resistance, retreat and card type. Rip it, score it, and come back tomorrow for another.`
+    : `<b>Unlimited.</b> Open as many random packs as you like. These are practice packs, so they never count toward your stats or the leaderboard.`;
   shown = null;
   /* a pack that's already open (or a finished run) needs its moves before it can be drawn or scored */
   const need = st.pack >= PACKS ? run.map((_, i) => i) : st.ripped ? run.slice(0, st.pack + 1).map((_, i) => i) : [];
   const tok = ++modeTok;
   if (!need.length) { render(); return; }
-  restoreDaily(need, tok);
+  restoreRun(need, tok);
 }
 let modeTok = 0;
-/* an opened daily comes back exactly as it was played: moves come from the saved run, never from a fresh (possibly different) fetch */
-async function restoreDaily(need, tok){
+/* an opened run comes back exactly as it was played: moves come from the saved run, never from a fresh (possibly different) fetch */
+async function restoreRun(need, tok){
   const box = $("#loading");
   $("#loading span").textContent = "Loading your cards…"; $("#loadRetry").hidden = true; box.hidden = false;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1044,12 +1047,12 @@ function updateControls(){
 /* ---------- actions ---------- */
 function ripPack(){
   const p = $("#pack"), pk = st.pack, md = mode, runRef = run, sleep = ms => new Promise(r => setTimeout(r, ms));
-  /* the daily is scored one way for everyone, so it never falls back to estimated data */
-  if (md === "daily" && !dataOk) { toast("Couldn't load the Pokémon data, so today's daily can't start. Check your connection and reload."); return; }
+  /* the daily pack is scored one way for everyone, so it never falls back to estimated data (practice packs may) */
+  if (md === "daily" && !dataOk) { toast("Couldn't load the Pokémon data, so today's pack can't be opened. Check your connection and reload."); return; }
   sfx.rip();
   p.classList.add("ripping");
   Promise.all([Promise.race([attachPack(pk), sleep(6000)]), sleep(reduced ? 0 : 650)]).then(() => {
-    if (mode !== md || run !== runRef || st.pack !== pk) return;   /* the player switched mode or account meanwhile */
+    if (mode !== md || run !== runRef || st.pack !== pk) return;   /* the player switched tab, account or pack meanwhile */
     if (md === "daily") {
       if (!run[pk].every(c => c.mv)) {
         mvOffUntil = 0; p.classList.remove("ripping");
@@ -1057,7 +1060,7 @@ function ripPack(){
         return;
       }
       st.mv = st.mv || {}; st.mv[pk] = run[pk].map(c => c.mv);   /* saved with the run, so reloading can never change the score */
-    } else lockMoves(run[pk]);   /* free play may fall back to generated moves */
+    } else lockMoves(run[pk]);
     st.ripped = true; persist(); buildCards(); show("viewCards"); updateHud(false);
   });
 }
@@ -1101,23 +1104,25 @@ function next(){
 }
 
 /* ---------- stats ---------- */
-const defStats = {played:0, streak:0, lastDay:"", bestDaily:0, bestFree:0, freeRuns:0, shinies:0, packs:0, bestPull:null, daily:null};
-const getStats = () => Object.assign({}, defStats, store.get(K("stats"), {}));
+const defStats = {played:0, best:0, last:0, lastDay:"", sum:0, shinies:0, packs:0, bestPull:null, bestDaily:0, bestFree:0, freeRuns:0};
+/* older saves used a daily/free split; fold those numbers into the single run stats */
+const getStats = () => {
+  const s = Object.assign({}, defStats, store.get(K("stats"), {}));
+  s.best = Math.max(s.best, s.bestDaily, s.bestFree); s.played += s.freeRuns; s.freeRuns = 0; s.bestDaily = 0; s.bestFree = 0;
+  return s;
+};
 function finish(){
-  if (st.counted) return;
+  if (mode !== "daily" || st.counted) return;   /* practice packs never count */
   st.counted = true;
   const s = getStats(), all = run.flat(), t = runTotal();
   s.shinies += all.filter(c => c.shiny).length; s.packs += PACKS;
   const b = bestOf(all); if (!s.bestPull || b.pts > s.bestPull.pts) s.bestPull = {id:b.id, pts:b.pts, t:b.t, shiny:b.shiny};
-  if (mode === "daily") {
-    const y = new Date(); y.setDate(y.getDate() - 1);
-    s.streak = s.lastDay === keyOf(y) ? s.streak + 1 : 1; s.lastDay = key; s.played++; s.bestDaily = Math.max(s.bestDaily, t); s.daily = {key, score:t};
-  } else { s.freeRuns++; s.bestFree = Math.max(s.bestFree, t); }
+  s.played++; s.best = Math.max(s.best, t); s.last = t; s.lastDay = runDay; s.sum += t;
   store.set(K("stats"), s);
 }
 function showStats(){
   const s = getStats(), rows = [
-    ["Dailies played", s.played], ["Daily streak", s.streak], ["Best daily", fmt(s.bestDaily)], ["Best free run", fmt(s.bestFree)],
+    ["Days played", s.played], ["Best pack", fmt(s.best)], ["Last pack", s.played ? fmt(s.last) : "—"], ["Average pack", s.played && s.sum ? fmt(s.sum / s.played) : "—"],
     ["Packs opened", s.packs], ["Shinies", s.shinies],
     ["Best pull", s.bestPull ? nameOf(s.bestPull.id) + " · " + fmt(s.bestPull.pts) : "—"],
   ];
@@ -1154,12 +1159,11 @@ function setUser(u){
   const a = u && accounts()[u];
   $("#authBtn").textContent = a ? a.display : "Log in";
   syncAdminUi();
-  /* switching accounts is a full reset: close anything open, drop the old run, land on the new account's own daily */
+  /* switching accounts is a full reset: close anything open, drop the old run, land on the new account's own run (or a fresh random pack) */
   document.querySelectorAll("dialog[open]").forEach(d => d.close());
   $("#loading").hidden = true;
-  mode = "daily";
   window.scrollTo(0, 0);
-  startDaily();
+  startRun(false);
 }
 async function submitAuth(e){
   e.preventDefault();
@@ -1188,27 +1192,25 @@ const isAdmin = () => !!user && ADMINS.includes(user);
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 function syncAdminUi(){ $("#adminBtn").hidden = !isAdmin(); }
 function renderAdmin(){
-  const all = accounts(), today = keyOf(new Date());
+  const all = accounts();
   $("#admSub").textContent = "Signed in as " + accounts()[user].display + ". Changes apply to accounts stored in this browser.";
   const users = Object.keys(all);
   $("#admTbl").innerHTML = users.length
-    ? "<tr><th>Player</th><th>Created</th><th>Today</th><th>Best</th><th>Streak</th><th>Actions</th></tr>" + users.map(u => {
-        const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {}));
-        const d = store.get("packdle:u:" + u + ":day:" + today, null);
-        const status = d ? (d.pack >= PACKS ? "finished" : d.ripped ? "in progress" : "not started") : "not started";
+    ? "<tr><th>Player</th><th>Created</th><th>Current run</th><th>Best</th><th>Runs</th><th>Actions</th></tr>" + users.map(u => {
+        const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {})), best = Math.max(s.best, s.bestDaily, s.bestFree);
+        const r = (store.get("packdle:u:" + u + ":run", null) || {}).st;
+        const status = r ? (r.pack >= PACKS ? "finished" : r.ripped ? "in progress" : "not started") : "not started";
         return "<tr><td>" + esc(all[u].display) + (ADMINS.includes(u) ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(all[u].created || 0).toLocaleDateString() +
-          '</td><td class="n">' + status + '</td><td class="n">' + (s.bestDaily ? fmt(s.bestDaily) : "—") + '</td><td class="n">' + s.streak + '</td><td><span class="acts">' +
-          '<button data-act="reset" data-u="' + esc(u) + '">Reset daily</button><button data-act="pw" data-u="' + esc(u) + '">New password</button>' +
+          '</td><td class="n">' + status + '</td><td class="n">' + (best ? fmt(best) : "—") + '</td><td class="n">' + (s.played + s.freeRuns) + '</td><td><span class="acts">' +
+          '<button data-act="reset" data-u="' + esc(u) + '">New pack</button><button data-act="pw" data-u="' + esc(u) + '">New password</button>' +
           (u === user ? "" : '<button class="danger" data-act="del" data-u="' + esc(u) + '">Delete</button>') + "</span></td></tr>";
       }).join("")
     : "";
 }
-function resetDaily(u){
-  const today = keyOf(new Date());
-  localStorage.removeItem("packdle:u:" + u + ":day:" + today);
-  const sk = "packdle:u:" + u + ":stats", s = store.get(sk, null);
-  if (s && s.daily && s.daily.key === today) { s.played = Math.max(0, (s.played || 0) - 1); s.daily = null; store.set(sk, s); }
-  if (u === user) startDaily();
+function resetRun(u){
+  /* drops the account's current run so its next visit deals a fresh random pack (stats already earned stay) */
+  localStorage.removeItem("packdle:u:" + u + ":run");
+  if (u === user) startRun(true);
 }
 function openAdmin(){
   if (!isAdmin()) return;
@@ -1245,7 +1247,7 @@ async function adminAction(e){
   const b = e.target.closest("button[data-act]"); if (!b || !isAdmin()) return;
   const u = b.dataset.u, all = accounts(), name = all[u] && all[u].display;
   if (!name) return;
-  if (b.dataset.act === "reset") { resetDaily(u); toast("Reset today's daily for " + name + "."); }
+  if (b.dataset.act === "reset") { resetRun(u); toast("Dealt " + name + " a fresh pack."); }
   else if (b.dataset.act === "pw") {
     const pw = await askText("New password for " + name, "New password (at least 6 characters)", 6);
     if (pw === null) return;
@@ -1265,7 +1267,7 @@ $("#admPreview").addEventListener("click", () => {
   const id = Math.min(MAX_ID, Math.max(1, parseInt($("#admId").value, 10) || 25)), t = +$("#admRar").value, shiny = $("#admShiny").checked;
   openZoomCard({id, t, shiny});
 });
-$("#admResetMine").addEventListener("click", () => { if (!isAdmin()) return; resetDaily(user); renderAdmin(); toast("Your daily was reset."); });
+$("#admResetMine").addEventListener("click", () => { if (!isAdmin()) return; resetRun(user); renderAdmin(); toast("Dealt you a fresh pack."); });
 $("#admExport").addEventListener("click", async () => {
   if (!isAdmin()) return;
   const dump = {}; Object.keys(localStorage).filter(k => k.startsWith("packdle:") && k !== "packdle:bulk2").forEach(k => dump[k] = store.get(k, null));
@@ -1290,15 +1292,15 @@ $("#cdOrder").addEventListener("click", () => openCards(false));
 $("#cdBest").addEventListener("click", () => openCards(true));
 
 function openBoard(){
-  const all = accounts(), today = keyOf(new Date());
+  const all = accounts();
   const rows = Object.keys(all).map(u => {
     const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {}));
-    return {u, name:all[u].display, today:s.daily && s.daily.key === today ? s.daily.score : null, best:s.bestDaily, streak:s.streak};
+    return {u, name:all[u].display, best:Math.max(s.best, s.bestDaily, s.bestFree), today:s.lastDay === todayKey() && s.played ? s.last : null, runs:s.played + s.freeRuns};
   }).sort((a, b) => (b.today ?? -1) - (a.today ?? -1) || b.best - a.best);
-  $("#boardSub").textContent = rows.length ? "Everyone with an account in this browser. Today is Daily #" + dayNo + "." : "No accounts yet. Sign up and finish a daily run to appear here.";
+  $("#boardSub").textContent = rows.length ? "Everyone with an account in this browser. Each account opens one random pack a day, so today's score is today's luck." : "No accounts yet. Sign up and open a pack to appear here.";
   $("#boardTbl").innerHTML = rows.length
-    ? "<tr><th>#</th><th>Player</th><th>Today</th><th>Best daily</th><th>Streak</th></tr>" + rows.map((r, i) =>
-      '<tr><td class="n">' + (i+1) + '</td><td class="' + (r.u === user ? "me" : "") + '">' + r.name.replace(/[<>&]/g, "") + '</td><td class="n">' + (r.today === null ? "—" : fmt(r.today)) + '</td><td class="n">' + (r.best ? fmt(r.best) : "—") + '</td><td class="n">' + r.streak + '</td></tr>').join("")
+    ? "<tr><th>#</th><th>Player</th><th>Today</th><th>Best pack</th><th>Days</th></tr>" + rows.map((r, i) =>
+      '<tr><td class="n">' + (i+1) + '</td><td class="' + (r.u === user ? "me" : "") + '">' + r.name.replace(/[<>&]/g, "") + '</td><td class="n">' + (r.today === null ? "—" : fmt(r.today)) + '</td><td class="n">' + (r.best ? fmt(r.best) : "—") + '</td><td class="n">' + r.runs + '</td></tr>').join("")
     : "";
   $("#boardDlg").showModal();
 }
@@ -1307,7 +1309,7 @@ function openBoard(){
 function shareText(t, rank, top){
   const grid = run.map(p => p.map(c => c.shiny ? "✨" : RAR[c.t].sq).join("")).join("\n");
   const bg = run.flatMap(badgesFor), bp = bg.reduce((a, b) => a + b.pts, 0);
-  return (mode === "daily" ? "POKEPACKDLE #" + dayNo : "POKEPACKDLE free run") + "\n" + fmt(t) + " pts · " + rank + " (top " + top + ")\n" + grid +
+  return (mode === "daily" ? "POKEPACKDLE · RNG race" : "POKEPACKDLE · practice pack") + "\n" + fmt(t) + " pts · " + rank + " (top " + top + ")\n" + grid +
     "\n" + bg.length + (bg.length === 1 ? " badge" : " badges") + (bg.length ? " (+" + fmt(bp) + ") " + bg.map(b => b.i).join("") : "");
 }
 function renderResults(){
@@ -1329,8 +1331,7 @@ function renderResults(){
     '</table></div></div>' +
     '<pre class="grid-share">' + text.split("\n").slice(2).join("\n") + '</pre>' +
     '<div class="controls" style="justify-content:flex-start;margin-top:0"><button class="btn" id="shareBtn">Copy result</button><button class="btn ghost" id="checkBtn">Check cards</button>' +
-    '<button class="btn ghost" id="againBtn">' + (mode === "daily" ? "Play free run" : "New free run") + '</button></div>' +
-    '<p class="note" id="nextDaily"></p>';
+    '</div><p class="note" id="nextPack" style="margin-top:14px"></p>';
   $("#bestCard").append(cardEl(b, 0, true));
   $("#shareBtn").onclick = async () => {
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it anywhere."); }
@@ -1340,12 +1341,25 @@ function renderResults(){
       ta.remove(); toast(ok ? "Copied. Paste it anywhere." : "Couldn't copy. Select the grid above and copy it by hand.");
     }
   };
-  $("#againBtn").onclick = startFree;
   $("#checkBtn").onclick = () => openCards(false);
-  if (mode === "daily") {
-    const n = new Date(); const tm = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n;
-    $("#nextDaily").textContent = "Next daily in " + Math.floor(tm/36e5) + "h " + Math.floor(tm % 36e5 / 6e4) + "m.";
-  }
+  /* one pack a day: show when the next one unlocks, and offer it once the day has rolled over */
+  const tick = () => {
+    const el = $("#nextPack"); if (!el || $("#viewResults").hidden) return;
+    if (mode === "free") {
+      if (!el.dataset.set) {
+        el.dataset.set = "1";
+        el.innerHTML = 'Practice pack: it doesn\'t count toward your stats or the leaderboard.<br><br><button class="btn" id="againBtn">Open another pack</button>';
+        $("#againBtn").onclick = () => { window.scrollTo(0, 0); startFree(); };
+      }
+      return;
+    }
+    const n = new Date(), tm = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n;
+    if (tm <= 0 || runDay !== todayKey()) {
+      el.innerHTML = '<button class="btn" id="againBtn">Open today\'s pack</button>';
+      $("#againBtn").onclick = () => { window.scrollTo(0, 0); startRun(false); };
+    } else el.textContent = "You've opened today's pack. The next one unlocks in " + Math.floor(tm / 36e5) + "h " + Math.floor(tm % 36e5 / 6e4) + "m.";
+  };
+  tick(); clearInterval(window.__nextTimer); window.__nextTimer = setInterval(tick, 30000);
 }
 let toastT = 0;
 function toast(m){ const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800); }
@@ -1380,7 +1394,7 @@ document.addEventListener("pointerout", e => {
 });
 $("#flipAll").addEventListener("click", flipAll);
 $("#nextBtn").addEventListener("click", next);
-$("#tabDaily").addEventListener("click", () => { if (mode !== "daily") startDaily(); });
+$("#tabDaily").addEventListener("click", () => { if (mode !== "daily") startRun(false); });
 $("#tabFree").addEventListener("click", () => { if (mode !== "free") startFree(); });
 $("#statsBtn").addEventListener("click", showStats);
 $("#boardBtn").addEventListener("click", openBoard);
@@ -1403,12 +1417,12 @@ if (saved && accounts()[saved]) { user = saved; $("#authBtn").textContent = acco
   $("#loading").hidden = false;
   await loadBulk();
   $("#loading").hidden = true;
-  startDaily();
-  if (!dataOk) toast("Couldn't load Pokémon data. Free play works with estimates, but the daily needs a connection.");
+  startRun(false);
+  if (!dataOk) toast("Couldn't load Pokémon data. Packs need a connection, so check it and reload.");
   $("#loadRetry").addEventListener("click", async () => {
     $("#loadRetry").hidden = true; $("#loading span").textContent = "Loading Pokémon data…";
     if (!dataOk) await loadBulk();
-    startDaily();
+    startRun(false);
   });
 })();
 })();
