@@ -1,8 +1,8 @@
-name = "pokepackdle-api"
+name = "pokepackdle"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "pokepackdle"
-database_id = "PASTE-YOUR-DATABASE-ID-HERE"
+database_id = "cc0b1643-0fb1-434b-8a7d-96dc6be88208"
