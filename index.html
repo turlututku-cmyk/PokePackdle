@@ -76,8 +76,8 @@ header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-block
   transition:transform .4s .15s, opacity .4s .15s;
 }
 .pack .ptitle{font:400 24px/1 var(--display); letter-spacing:.03em; text-shadow:0 2px 0 rgba(0,0,0,.25)}
-.pack .ball{width:46%; aspect-ratio:1; position:relative; transform:rotate(45deg); background:#f7f3e6; border:4px solid #1b1b1b; border-radius:6px; margin-block:5%}
-.pack .ball::after{content:""; position:absolute; inset:24%; background:var(--p2); border:3px solid #1b1b1b; border-radius:3px}
+.pack .ball{width:56%; aspect-ratio:1; border-radius:50%; border:4px solid #fff; background:linear-gradient(#fff 0 47%,#1b1b1b 47% 53%,#fff 53% 100%); position:relative; box-shadow:0 6px 0 rgba(0,0,0,.2)}
+.pack .ball::after{content:""; position:absolute; inset:50% auto auto 50%; width:24%; aspect-ratio:1; border-radius:50%; background:#fff; border:4px solid #1b1b1b; transform:translate(-50%,-50%)}
 .pack .pset{font:600 12px/1.2 var(--mono); letter-spacing:.16em; text-transform:uppercase}
 .pack .pnum{font:600 11px/1 var(--mono); letter-spacing:.12em; opacity:.85}
 .pack.ripping{pointer-events:none}
@@ -359,21 +359,15 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
   *,*::before,*::after{animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important}
 }
 </style>
-<style>
-/* drawn creature art: sizing, shiny tint, and the card back */
-.art svg{width:100%; height:100%; display:block; filter:drop-shadow(0 3px 2px rgba(0,0,0,.28))}
-.card.shiny .art svg{filter:hue-rotate(150deg) saturate(1.15) drop-shadow(0 3px 2px rgba(0,0,0,.28))}
-.back{background:
-  linear-gradient(45deg,transparent 46%,rgba(255,255,255,.2) 47% 53%,transparent 54%) 0 0/16px 16px,
-  linear-gradient(-45deg,transparent 46%,rgba(255,255,255,.2) 47% 53%,transparent 54%) 0 0/16px 16px,
-  var(--back1)}
-.back::after{content:""; position:absolute; left:50%; top:50%; width:24cqw; height:24cqw; transform:translate(-50%,-50%) rotate(45deg); background:var(--back2); border:1.6cqw solid #f4f1e6; border-radius:1.5cqw}
-</style>
 </head>
 <body>
 <div id="page" class="wrap">
   <header>
     <h1 class="logo">POKE<span>PACKDLE</span></h1>
+    <div class="tabs" role="tablist" aria-label="Game mode">
+      <button class="tab" role="tab" id="tabDaily" aria-selected="true">Daily</button>
+      <button class="tab" role="tab" id="tabFree" aria-selected="false">Free play</button>
+    </div>
     <button class="iconbtn" id="muteBtn" aria-pressed="false" aria-label="Sound on">Sound on</button>
     <button class="iconbtn admin" id="adminBtn" hidden>Admin</button>
     <button class="iconbtn" id="boardBtn">Board</button>
@@ -446,11 +440,11 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
       <button type="button" class="btn ghost" id="auCancel">Cancel</button>
     </div>
   </form>
-  <p class="note" style="margin:16px 0 0;font-size:13px">Accounts live in this browser only. They keep your runs and stats separate, but aren't synced between devices.</p>
+  <p class="note" style="margin:16px 0 0;font-size:13px">Accounts live in this browser only. They keep your daily progress and stats separate, but aren't synced between devices.</p>
 </dialog>
 <dialog id="acctDlg">
   <h2 id="acctName">Player</h2>
-  <p class="note" style="margin-top:0">You're logged in. Your current run and stats are saved to this account.</p>
+  <p class="note" style="margin-top:0">You're logged in. Your daily progress and stats are saved to this account.</p>
   <div class="controls" style="justify-content:flex-start;margin-top:14px">
     <button class="btn" id="logoutBtn">Log out</button>
     <form method="dialog"><button class="btn ghost">Close</button></form>
@@ -473,7 +467,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 
   <div class="lbl" style="margin-top:22px">Tools</div>
   <div class="adm-row">
-    <button type="button" class="btn sm ghost" id="admResetMine">Deal me a new pack</button>
+    <button type="button" class="btn sm ghost" id="admResetMine">Reset my daily</button>
     <button type="button" class="btn sm ghost" id="admExport">Copy all data (JSON)</button>
     <button type="button" class="btn sm ghost danger" id="admWipe">Wipe all game data</button>
   </div>
@@ -702,34 +696,46 @@ function syncMuteUi(){
 let user = null;
 const K = s => user ? "packdle:u:" + user + ":" + s : "packdle:" + s;
 const nameOf = id => { const d = DATA && DATA[id - 1]; return d && d.n ? cap(d.n) : "#" + id; };
+const artUrl = (id, shiny) => "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/" + (shiny ? "shiny/" : "") + id + ".png";
 
 /* ---------- state ---------- */
 const fresh = () => ({pack:0, ripped:false, flipped:Array(PER).fill(false), counted:false});
-let seed = 0, run = [], st = fresh();
-const persist = () => store.set(K("run"), {seed, st});
+let mode = "daily", key = "", dayNo = 1, seed = 0, run = [], st = fresh();
+const persist = () => { if (mode === "daily") store.set(K("day:" + key), st); };
 
-/* Every run is a brand-new random pack. The current run is saved per account, so refreshing can't reroll cards you've already seen. */
-function startRun(newRun){
-  const saved = newRun ? null : store.get(K("run"), null);
-  /* only a pack that's been opened is restored; an untouched sealed pack is simply replaced by a new random one */
-  if (saved && saved.st && Number.isFinite(saved.seed) && (saved.st.ripped || saved.st.pack >= PACKS)) { seed = saved.seed; st = saved.st; }
-  else { seed = (Math.random() * 2**32) >>> 0; st = fresh(); }
+function startDaily(){
+  mode = "daily";
+  const now = new Date();
+  key = keyOf(now);
+  dayNo = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(2026,0,1)) / 864e5) + 1;
+  seed = hash("packdle:" + key);
   run = genRun(seed);
-  persist();
+  st = store.get(K("day:" + key), null) || fresh();
+  setMode();
+}
+function startFree(){
+  mode = "free";
+  seed = (Math.random() * 2**32) >>> 0;
+  run = genRun(seed);
+  st = fresh();
   setMode();
 }
 function setMode(){
-  $("#blurb").innerHTML = `<b>Random every time.</b> ${PACKS === 1 ? "One pack" : PACKS + " packs"}, ${PER} cards${PACKS > 1 ? " each" : ""}. Every card scores from its HP, attacks, type, weakness, resistance, retreat and card type. Rip it, score it, then go again and race for your best.`;
+  $("#tabDaily").setAttribute("aria-selected", mode === "daily");
+  $("#tabFree").setAttribute("aria-selected", mode === "free");
+  $("#blurb").innerHTML = mode === "daily"
+    ? `<b>Daily #${dayNo}.</b> ${PACKS === 1 ? "One pack" : PACKS + " packs"}, ${PER} cards${PACKS > 1 ? " each" : ""}. Every card scores from its HP, attacks, type, weakness, resistance, retreat and card type. Everyone opens the same pack today, so compare your total.`
+    : `<b>Free play.</b> Random packs, no limit. Chase a high-HP VMAX with cheap retreat.`;
   shown = null;
   /* a pack that's already open (or a finished run) needs its moves before it can be drawn or scored */
   const need = st.pack >= PACKS ? run.map((_, i) => i) : st.ripped ? run.slice(0, st.pack + 1).map((_, i) => i) : [];
   const tok = ++modeTok;
   if (!need.length) { render(); return; }
-  restoreRun(need, tok);
+  restoreDaily(need, tok);
 }
 let modeTok = 0;
-/* an opened run comes back exactly as it was played: moves come from the saved run, never from a fresh (possibly different) fetch */
-async function restoreRun(need, tok){
+/* an opened daily comes back exactly as it was played: moves come from the saved run, never from a fresh (possibly different) fetch */
+async function restoreDaily(need, tok){
   const box = $("#loading");
   $("#loading span").textContent = "Loading your cards…"; $("#loadRetry").hidden = true; box.hidden = false;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -969,139 +975,6 @@ function cardStats(id, t, d, mv){
     ht:Math.floor(inch / 12) + "′" + pad(inch % 12) + "″", wt:lb + " lbs",
   };
 }
-/* ---------- original creature art: every card gets its own monster, drawn in code from the card's data ---------- */
-const TYPE_PAL = {   /* body, outline, belly, accent */
-  grass:["#6fae4f","#35682e","#d3e8ad","#e2bf47"], fire:["#cf4b3c","#7d1f1a","#f0b98a","#f2c14a"],
-  water:["#4f8fd6","#254f8a","#c1def5","#7fd0da"], lightning:["#eec437","#8a6c10","#faeaa2","#dd6f38"],
-  psychic:["#a76cc4","#5f3480","#e4cef1","#f08db6"], fighting:["#b9713f","#6f3d1e","#e8caa8","#d9a23e"],
-  darkness:["#5d647b","#272d40","#a1a9c0","#c25a7a"], metal:["#8e9ca9","#4d5a66","#d7dfe5","#deb149"],
-  dragon:["#cb9c3d","#74521a","#f2e0a4","#c4543c"], fairy:["#e88fb8","#9c4a76","#f8d9e9","#86c6e6"],
-  colorless:["#b8b29f","#6f695a","#ece8db","#d78a58"],
-};
-function tint(hex, amt){   /* lighten (amt > 0) or darken (amt < 0) a #rrggbb colour */
-  const n = parseInt(hex.slice(1), 16), f = c => Math.max(0, Math.min(255, Math.round(amt > 0 ? c + (255 - c) * amt : c * (1 + amt))));
-  return "#" + [n >> 16, (n >> 8) & 255, n & 255].map(f).map(v => v.toString(16).padStart(2, "0")).join("");
-}
-function creatureSVG(id, d){
-  const R = mulberry32((id * 2654435761 ^ 0x51ed270b) >>> 0), f = n => +n.toFixed(1);
-  const pick = a => a[Math.floor(R() * a.length)], rr = (a, b) => a + R() * (b - a);
-  const kind = TYPE_PAL[d.ty] ? d.ty : "colorless", pal = TYPE_PAL[kind];
-  const body = tint(pal[0], rr(-.1, .14)), dark = pal[1], belly = pal[2], acc = pal[3];
-  const hi = tint(body, .38), lo = tint(body, -.3), gid = "cb" + id;
-  const s = Math.min(1.08, 0.62 + (Math.log10(Math.max(10, d.wt)) - 1) * 0.16);   /* heavier = bigger */
-  const stage = d.st === "STAGE 2" ? 2 : d.st === "STAGE 1" ? 1 : 0;                /* later stages: bigger, fancier */
-  const sc = s * (1 + stage * .04);
-  const T = (n, a) => "<" + n + " " + Object.keys(a).map(k => k + '="' + (typeof a[k] === "number" ? f(a[k]) : a[k]) + '"').join(" ") + "/>";
-  const P = (dd, a) => T("path", Object.assign({d:dd}, a));
-  const S = {stroke:dark, "stroke-width":3, "stroke-linejoin":"round", "stroke-linecap":"round"};
-  const FB = {fill:"url(#" + gid + ")"};
-  const defs = '<defs><radialGradient id="' + gid + '" cx=".35" cy=".28" r=".95"><stop offset="0" stop-color="' + hi + '"/><stop offset=".55" stop-color="' + body + '"/><stop offset="1" stop-color="' + lo + '"/></radialGradient></defs>';
-  /* small shape helpers */
-  const flame = (x, y, h) => P("M" + f(x - h*.3) + " " + f(y) + "C" + f(x - h*.42) + " " + f(y - h*.45) + " " + f(x - h*.02) + " " + f(y - h*.55) + " " + f(x + h*.05) + " " + f(y - h) + "C" + f(x + h*.18) + " " + f(y - h*.6) + " " + f(x + h*.46) + " " + f(y - h*.42) + " " + f(x + h*.3) + " " + f(y) + "z", Object.assign({fill:acc}, S))
-    + P("M" + f(x - h*.12) + " " + f(y) + "C" + f(x - h*.18) + " " + f(y - h*.25) + " " + f(x + h*.02) + " " + f(y - h*.3) + " " + f(x + h*.04) + " " + f(y - h*.55) + "C" + f(x + h*.14) + " " + f(y - h*.3) + " " + f(x + h*.22) + " " + f(y - h*.2) + " " + f(x + h*.12) + " " + f(y) + "z", {fill:"#fff4b8"});
-  const leaf = (x, y, ang, len, col) => P("M0 0Q" + f(len*.5) + " " + f(-len*.5) + " " + f(len) + " 0Q" + f(len*.5) + " " + f(len*.5) + " 0 0z", Object.assign({transform:"translate(" + f(x) + " " + f(y) + ") rotate(" + ang + ")", fill:col}, S))
-    + P("M0 0L" + f(len*.85) + " 0", {transform:"translate(" + f(x) + " " + f(y) + ") rotate(" + ang + ")", stroke:tint(col, .45), "stroke-width":1.5, fill:"none"});
-  const bolt = (x, y, h, col) => P("M" + f(x + h*.22) + " " + f(y) + "L" + f(x - h*.25) + " " + f(y + h*.48) + "L" + f(x - h*.02) + " " + f(y + h*.48) + "L" + f(x - h*.24) + " " + f(y + h) + "L" + f(x + h*.28) + " " + f(y + h*.4) + "L" + f(x + h*.04) + " " + f(y + h*.4) + "z", Object.assign({fill:col}, S));
-  const fin = (x, y, dir, h) => P("M" + f(x) + " " + f(y) + "Q" + f(x + dir*h*.9) + " " + f(y - h*.2) + " " + f(x + dir*h*.7) + " " + f(y - h*.95) + "Q" + f(x + dir*h*.15) + " " + f(y - h*.5) + " " + f(x) + " " + f(y) + "z", Object.assign({fill:acc}, S));
-  const spark = (x, y, r) => P("M" + f(x) + " " + f(y - r) + "Q" + f(x) + " " + f(y) + " " + f(x + r) + " " + f(y) + "Q" + f(x) + " " + f(y) + " " + f(x) + " " + f(y + r) + "Q" + f(x) + " " + f(y) + " " + f(x - r) + " " + f(y) + "Q" + f(x) + " " + f(y) + " " + f(x) + " " + f(y - r) + "z", {fill:"#fff", stroke:acc, "stroke-width":1.2});
-
-  /* proportions */
-  const shape = pick(["round", "egg", "pear", "tall", "wide", "dome", "bean"]);
-  const cx = 100, ground = 158;
-  let rx = rr(40, 54) * sc, ry = rr(36, 49) * sc;   /* big in the frame, so the art reads at card size */
-  if (shape === "egg") { rx *= .84; ry *= 1.1; }
-  if (shape === "tall") { rx *= .8; ry *= 1.12; }
-  if (shape === "dome") { ry *= .86; rx *= 1.1; }
-  if (shape === "wide") { rx *= 1.15; ry *= .84; }
-  if (shape === "pear") { rx *= 1.05; ry *= 1.08; }
-  ry = Math.min(ry, 56); rx = Math.min(rx, 62);
-  const cy = ground - ry - 6, top = shape === "dome" ? cy - ry * .8 : cy - ry, pear = shape === "pear";
-  const faceY = pear ? cy - ry * .4 : cy - ry * .16, faceW = pear ? rx * .62 : rx;
-  const side = R() < .5 ? -1 : 1, tilt = rr(-4, 4);
-  let under = T("ellipse", {cx, cy:ground + 2, rx:rx * .95, ry:7, fill:dark, opacity:.22}), back = "", front = "";
-  if (stage === 2) under = T("circle", {cx, cy:cy - ry * .1, r:rx * 1.5, fill:acc, opacity:.16}) + under;
-
-  /* tail, finished off with something typical for the type */
-  if (R() < .8) {
-    const tx = cx + side * rx * .8, tyy = cy + ry * .4, len = rr(28, 46) * sc, lift = rr(-14, 10), ex = tx + side * len * .8, ey = tyy - len * .85;
-    const pd = "M" + f(tx) + " " + f(tyy) + "q" + f(side * len) + " " + f(lift) + " " + f(side * len * .8) + " " + f(-len * .85);
-    back += P(pd, {fill:"none", stroke:dark, "stroke-width":13, "stroke-linecap":"round"}) + P(pd, {fill:"none", stroke:body, "stroke-width":6.5, "stroke-linecap":"round"});
-    if (kind === "water") back += fin(ex, ey + 4, side, 26 * sc);
-    else if (kind === "grass") back += leaf(ex, ey + 2, side > 0 ? -50 : -130, 24 * sc, tint(body, -.1));
-    else if (R() < .5) back += T("circle", Object.assign({cx:ex, cy:ey, r:7, fill:acc}, S));
-  }
-  /* wings and crest */
-  if (stage >= 1 && R() < .6) [-1, 1].forEach(sd => {
-    const wx = cx + sd * rx * .95, wy = cy - ry * .25;
-    back += T("ellipse", Object.assign({cx:wx, cy:wy, rx:rx * .6, ry:ry * .3, transform:"rotate(" + (sd * -28) + " " + f(wx) + " " + f(wy) + ")", fill:acc}, S));
-  });
-  if (stage === 2 && R() < .7) for (let k = -1; k <= 1; k++) back += P("M" + f(cx + k * 15 - 7) + " " + f(top + 6) + "l7 -18l7 18z", Object.assign({fill:acc}, S));
-  /* type feature on the head, drawn behind the body so its base is hidden */
-  const hs = 1 + stage * .18;
-  if (kind === "fire") back += flame(cx - rx * .62, cy - ry * .55, 22 * sc * hs) + flame(cx + rx * .62, cy - ry * .55, 22 * sc * hs) + flame(cx, top + 6, 26 * sc * hs);   /* a burning mane, not a tail flame */
-  if (kind === "grass") { back += leaf(cx - 2, top + 10, -145, 28 * sc * hs, tint(body, -.12)) + leaf(cx + 2, top + 10, -35, 28 * sc * hs, tint(body, -.12)); }
-  if (kind === "water") back += fin(cx + side * rx * .15, top + 10, -side, 32 * sc * hs);
-  if (kind === "lightning") back += bolt(cx - rx * .34, top - 6, 24 * sc * hs, acc) + bolt(cx + rx * .34, top - 6, 24 * sc * hs, acc);
-  if (kind === "darkness") for (let k = -2; k <= 2; k++) back += P("M" + f(cx + k * rx * .36 - 9) + " " + f(top + ry * .3 + Math.abs(k) * ry * .1) + "l9 -20l9 20z", Object.assign({fill:dark}, S));
-  if (kind === "dragon") [-1, 1].forEach(sd => { back += P("M" + f(cx + sd * rx * .3) + " " + f(top + 8) + "q" + f(sd * 16) + " -6 " + f(sd * 20) + " -28q" + f(-sd * 14) + " 10 " + f(-sd * 20) + " 26z", Object.assign({fill:acc}, S)); });
-  if (kind === "psychic") [[-.9, -.45, 6], [.95, -.15, 4.5], [-.7, .5, 3.5]].forEach(o => { back += T("circle", {cx:cx + o[0] * rx * 1.15, cy:cy + o[1] * ry, r:o[2], fill:acc, opacity:.85}); });
-  if (kind === "fairy") back += spark(30, 44, 8) + spark(172, 56, 6) + spark(162, 124, 5) + spark(36, 116, 4);
-  if (kind === "water") back += T("circle", {cx:cx - side * rx * 1.15, cy:cy - ry * .9, r:5, fill:"none", stroke:"#fff", "stroke-opacity":.7, "stroke-width":1.6}) + T("circle", {cx:cx - side * rx * 1.3, cy:cy - ry * .55, r:3, fill:"none", stroke:"#fff", "stroke-opacity":.7, "stroke-width":1.6});
-  /* ears */
-  const ear = pick({fire:["round", "none", "none"], water:["round", "none", "long"], grass:["round", "none"], lightning:["none", "round"], psychic:["point", "long"], fighting:["round", "none"], darkness:["point"], metal:["point", "none"], dragon:["none", "point"], fairy:["long", "round"], colorless:["round", "point", "long", "none"]}[kind]);
-  [-1, 1].forEach(sd => {
-    const ex = cx + sd * rx * .58, ey = top + ry * .34;
-    if (ear === "point") back += P("M" + f(ex - 10) + " " + f(ey) + "L" + f(ex + sd * 5) + " " + f(ey - 28) + "L" + f(ex + 10) + " " + f(ey) + "z", Object.assign({fill:body}, S)) + P("M" + f(ex - 4) + " " + f(ey - 2) + "L" + f(ex + sd * 4) + " " + f(ey - 17) + "L" + f(ex + 5) + " " + f(ey - 2) + "z", {fill:belly});
-    else if (ear === "round") back += T("circle", Object.assign({cx:ex, cy:ey - 4, r:12, fill:body}, S)) + T("circle", {cx:ex, cy:ey - 4, r:5.5, fill:belly});
-    else if (ear === "long") back += T("ellipse", Object.assign({cx:ex + sd * 4, cy:ey - 16, rx:8, ry:22, transform:"rotate(" + (sd * 14) + " " + f(ex + sd * 4) + " " + f(ey - 16) + ")", fill:body}, S));
-  });
-  if (stage >= 1 && ["colorless", "fighting", "metal", "psychic"].includes(kind) && R() < .7) (stage === 2 ? [-1, 1] : [0]).forEach(k => {
-    back += P("M" + f(cx + k * rx * .35 - 7) + " " + f(top + 8) + "l" + (7 + k * 4) + " -24l7 24z", Object.assign({fill:acc}, S));
-  });
-  /* legs, body, belly, light */
-  [-1, 1].forEach(sd => { back += T("rect", Object.assign({x:cx + sd * rx * .42 - 10, y:ground - 16, width:20, height:18, rx:7}, FB, S)); });
-  let bodyEl;
-  if (shape === "dome") bodyEl = P("M" + f(cx - rx) + " " + (ground - 6) + "C" + f(cx - rx) + " " + f(cy - ry * 1.15) + " " + f(cx + rx) + " " + f(cy - ry * 1.15) + " " + f(cx + rx) + " " + (ground - 6) + "z", Object.assign({}, FB, S));
-  else if (pear) bodyEl = P("M" + cx + " " + f(top) + "C" + f(cx + rx * .5) + " " + f(top) + " " + f(cx + rx * .62) + " " + f(cy - ry * .3) + " " + f(cx + rx * .92) + " " + f(cy + ry * .2) + "C" + f(cx + rx * 1.08) + " " + f(cy + ry * .8) + " " + f(cx + rx * .5) + " " + f(cy + ry) + " " + cx + " " + f(cy + ry) + "C" + f(cx - rx * .5) + " " + f(cy + ry) + " " + f(cx - rx * 1.08) + " " + f(cy + ry * .8) + " " + f(cx - rx * .92) + " " + f(cy + ry * .2) + "C" + f(cx - rx * .62) + " " + f(cy - ry * .3) + " " + f(cx - rx * .5) + " " + f(top) + " " + cx + " " + f(top) + "z", Object.assign({}, FB, S));
-  else bodyEl = T("ellipse", Object.assign({cx, cy, rx, ry, transform:shape === "bean" ? "rotate(" + (side * 10) + " " + cx + " " + f(cy) + ")" : "rotate(0)"}, FB, S));
-  front += bodyEl + T("ellipse", {cx, cy:cy + ry * .34, rx:rx * .56, ry:ry * .44, fill:belly})
-    + T("ellipse", {cx:cx - rx * .38, cy:cy - ry * .55, rx:rx * .26, ry:ry * .13, fill:"#fff", opacity:.3, transform:"rotate(-25 " + f(cx - rx * .38) + " " + f(cy - ry * .55) + ")"});
-  /* markings */
-  const mark = pick(["spots", "stripes", "cheeks", "none", "cheeks"]);
-  if (mark === "spots") for (let k = 0; k < 4; k++) front += T("circle", {cx:cx + rr(-.72, .72) * rx, cy:cy + rr(-.7, .1) * ry, r:rr(4, 8), fill:dark, opacity:.2});
-  if (mark === "stripes") for (let k = -1; k <= 1; k++) front += P("M" + f(cx + k * rx * .42) + " " + f(top + 8) + "q6 12 0 24", {fill:"none", stroke:dark, "stroke-width":5, "stroke-linecap":"round", opacity:.28});
-  if (mark === "cheeks") [-1, 1].forEach(sd => { front += T("circle", {cx:cx + sd * faceW * .6, cy:faceY + 13, r:6.5, fill:"#f08a9a", opacity:.75}); });
-  /* type detail on the body */
-  if (kind === "metal") { front += P("M" + f(cx - rx * .6) + " " + f(cy + ry * .05) + "h" + f(rx * 1.2) + "M" + f(cx - rx * .5) + " " + f(cy + ry * .55) + "h" + f(rx) , {fill:"none", stroke:dark, "stroke-opacity":.35, "stroke-width":2.5}); [-1, 1].forEach(sd => { front += T("circle", {cx:cx + sd * rx * .62, cy:cy + ry * .3, r:3, fill:dark, opacity:.7}); }); }
-  if (kind === "dragon") for (let k = 0; k < 3; k++) front += P("M" + f(cx - rx * .42) + " " + f(cy + ry * (.14 + k * .2)) + "q" + f(rx * .42) + " 7 " + f(rx * .84) + " 0", {fill:"none", stroke:dark, "stroke-opacity":.3, "stroke-width":2.5});
-  if (kind === "darkness") front += T("circle", {cx, cy:cy + ry * .34, r:9, fill:acc, opacity:.9}) + T("circle", {cx:cx + 4, cy:cy + ry * .34 - 1, r:8, fill:belly});
-  if (kind === "psychic") front += P("M" + cx + " " + f(faceY - 25) + "l7 9l-7 9l-7 -9z", Object.assign({fill:acc}, S)) + T("circle", {cx:cx - 1.5, cy:faceY - 19, r:1.6, fill:"#fff", opacity:.85});
-  if (kind === "fighting") front += P("M" + f(cx - rx * .86) + " " + f(top + ry * .42) + "Q" + cx + " " + f(top + ry * .16) + " " + f(cx + rx * .86) + " " + f(top + ry * .42), {fill:"none", stroke:acc, "stroke-width":8, "stroke-linecap":"round"}) + P("M" + f(cx + side * rx * .84) + " " + f(top + ry * .42) + "l" + side * 14 + " 8M" + f(cx + side * rx * .84) + " " + f(top + ry * .42) + "l" + side * 10 + " -4", {fill:"none", stroke:acc, "stroke-width":5, "stroke-linecap":"round"});
-  if (kind === "fairy") { const bx = cx + side * rx * .5, by = top + ry * .22; front += P("M" + f(bx) + " " + f(by) + "l-12 -8v16zM" + f(bx) + " " + f(by) + "l12 -8v16z", Object.assign({fill:acc}, S)) + T("circle", Object.assign({cx:bx, cy:by, r:4, fill:acc}, S)); }
-  if (kind === "colorless") front += P("M" + (cx - 3) + " " + f(top + 2) + "q-6 -14 4 -18q-2 8 6 12", {fill:"none", stroke:dark, "stroke-width":3, "stroke-linecap":"round"});
-  /* arms (fighters get big ones) */
-  const aw = kind === "fighting" ? 11 : 9, ah = kind === "fighting" ? 17 : 14;
-  [-1, 1].forEach(sd => { front += T("ellipse", Object.assign({cx:cx + sd * rx * .98, cy:cy + ry * .18, rx:aw, ry:ah, transform:"rotate(" + (sd * -22) + " " + f(cx + sd * rx * .98) + " " + f(cy + ry * .18) + ")"}, FB, S)); });
-  /* face */
-  const eyeStyle = pick(["glossy", "glossy", "glossy", "narrow", "sleepy", "cyclops"]), ex = faceW * .36, ink = "#1e1a1a";
-  const shine = (x, y) => T("circle", {cx:x + 2.2, cy:y - 2.4, r:2.3, fill:"#fff"}) + T("circle", {cx:x - 2, cy:y + 2.6, r:1.1, fill:"#fff", opacity:.7});
-  if (eyeStyle === "glossy") [-1, 1].forEach(sd => { const x = cx + sd * ex; front += T("circle", {cx:x, cy:faceY, r:8.6 + stage * .5, fill:ink}) + shine(x, faceY); });
-  if (eyeStyle === "narrow") [-1, 1].forEach(sd => { const x = cx + sd * ex; front += T("ellipse", {cx:x, cy:faceY, rx:7.5, ry:4.6, fill:ink}) + T("circle", {cx:x + 2, cy:faceY - 1.4, r:1.8, fill:"#fff"}); });
-  if (eyeStyle === "sleepy") [-1, 1].forEach(sd => { front += P("M" + f(cx + sd * ex - 7) + " " + f(faceY) + "q7 6 14 0", {fill:"none", stroke:ink, "stroke-width":3, "stroke-linecap":"round"}); });
-  if (eyeStyle === "cyclops") front += T("circle", Object.assign({cx, cy:faceY - 2, r:12, fill:"#fff"}, S)) + T("circle", {cx, cy:faceY - 1, r:6.5, fill:ink}) + T("circle", {cx:cx + 2.2, cy:faceY - 3.4, r:2, fill:"#fff"});
-  if (eyeStyle !== "cyclops" && eyeStyle !== "sleepy" && ["fighting", "darkness", "fire", "metal", "dragon"].includes(kind) && R() < .75) [-1, 1].forEach(sd => { front += P("M" + f(cx + sd * ex - sd * 8) + " " + f(faceY - 11 - sd * 0) + "l" + f(sd * 16) + " " + f(sd > 0 ? 4 : 4) , {fill:"none", stroke:dark, "stroke-width":3.2, "stroke-linecap":"round"}); });
-  const my = faceY + 17, mouth = pick(["smile", "cat", "open", "fang", "flat", "smirk"]);
-  if (mouth === "smile" || mouth === "fang") front += P("M" + (cx - 9) + " " + f(my) + "q9 8 18 0", {fill:"none", stroke:ink, "stroke-width":3, "stroke-linecap":"round"});
-  if (mouth === "fang") front += P("M" + (cx - 6) + " " + f(my + 3) + "l3 6l3 -5zM" + (cx + 1) + " " + f(my + 4) + "l3 6l3 -6z", {fill:"#fff", stroke:ink, "stroke-width":1.2});
-  if (mouth === "cat") front += P("M" + (cx - 8) + " " + f(my) + "q4 6 8 0q4 6 8 0", {fill:"none", stroke:ink, "stroke-width":2.8, "stroke-linecap":"round"});
-  if (mouth === "open") front += P("M" + (cx - 8) + " " + f(my) + "Q" + cx + " " + f(my + 15) + " " + (cx + 8) + " " + f(my) + "z", Object.assign({fill:"#7a2f3a"}, S)) + T("ellipse", {cx, cy:my + 8, rx:4, ry:2.6, fill:"#e8798b"});
-  if (mouth === "flat") front += P("M" + (cx - 7) + " " + f(my) + "h14", {fill:"none", stroke:ink, "stroke-width":3, "stroke-linecap":"round"});
-  if (mouth === "smirk") front += P("M" + (cx - 8) + " " + f(my + 2) + "q8 6 16 -3", {fill:"none", stroke:ink, "stroke-width":3, "stroke-linecap":"round"});
-  if (R() < .35) front += T("ellipse", {cx, cy:faceY + 7, rx:3, ry:2.2, fill:ink, opacity:.8});
-  /* a white sticker-style outline behind the whole creature makes it pop off any background */
-  const sticker = '<filter id="st' + id + '" x="-15%" y="-15%" width="130%" height="130%"><feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="d"/><feFlood flood-color="#fff"/><feComposite in2="d" operator="in" result="o"/><feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
-  return '<svg class="crt" viewBox="0 0 200 170" aria-hidden="true">' + defs.replace("</defs>", sticker + "</defs>") + under + '<g filter="url(#st' + id + ')" transform="rotate(' + f(tilt) + ' 100 152)">' + back + front + "</g></svg>";
-}
 const RSYM = ["●","◆","★","★","★★","★★","♛"];
 const en = t => '<i class="en e-' + t + '">' + ENG[t] + '</i>';
 const cap = s => s.split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
@@ -1116,7 +989,7 @@ function frontHTML(c){
   return '<span class="hd">' + stg +
       '<span class="nm">' + nameOf(c.id) + suffix + (c.shiny ? '<b class="spark">✦</b>' : "") + "</span>" +
       '<span class="hp"><small>HP</small>' + s.hp + en(d.ty) + "</span></span>" +
-    '<span class="art">' + evo + creatureSVG(c.id, d) + "</span>" +
+    '<span class="art" data-id="#' + c.id + '">' + evo + '<img alt="" src="' + artUrl(c.id, c.shiny) + '" onerror="this.style.display=\'none\';this.parentNode.classList.add(\'noimg\')"></span>' +
     '<span class="dex">' + dex + "</span>" +
     '<span class="atks">' + atk(s.a1) + atk(s.a2) + "</span>" +
     '<span class="ft"><span><i>Weakness</i><b class="row">' + en(s.weak) + "×2</b></span>" +
@@ -1170,19 +1043,21 @@ function updateControls(){
 
 /* ---------- actions ---------- */
 function ripPack(){
-  const p = $("#pack"), pk = st.pack, runRef = run, sleep = ms => new Promise(r => setTimeout(r, ms));
-  /* a race is scored one way for everyone, so a pack never falls back to estimated data */
-  if (!dataOk) { toast("Couldn't load the Pokémon data, so a pack can't be opened. Check your connection and reload."); return; }
+  const p = $("#pack"), pk = st.pack, md = mode, runRef = run, sleep = ms => new Promise(r => setTimeout(r, ms));
+  /* the daily is scored one way for everyone, so it never falls back to estimated data */
+  if (md === "daily" && !dataOk) { toast("Couldn't load the Pokémon data, so today's daily can't start. Check your connection and reload."); return; }
   sfx.rip();
   p.classList.add("ripping");
   Promise.all([Promise.race([attachPack(pk), sleep(6000)]), sleep(reduced ? 0 : 650)]).then(() => {
-    if (run !== runRef || st.pack !== pk) return;   /* the player switched account or started a new pack meanwhile */
-    if (!run[pk].every(c => c.mv)) {
-      mvOffUntil = 0; p.classList.remove("ripping");
-      toast("Couldn't load this pack's moves. Check your connection and click the pack again.");
-      return;
-    }
-    st.mv = st.mv || {}; st.mv[pk] = run[pk].map(c => c.mv);   /* saved with the run, so reloading can never change the score */
+    if (mode !== md || run !== runRef || st.pack !== pk) return;   /* the player switched mode or account meanwhile */
+    if (md === "daily") {
+      if (!run[pk].every(c => c.mv)) {
+        mvOffUntil = 0; p.classList.remove("ripping");
+        toast("Couldn't load this pack's moves. Check your connection and click the pack again.");
+        return;
+      }
+      st.mv = st.mv || {}; st.mv[pk] = run[pk].map(c => c.mv);   /* saved with the run, so reloading can never change the score */
+    } else lockMoves(run[pk]);   /* free play may fall back to generated moves */
     st.ripped = true; persist(); buildCards(); show("viewCards"); updateHud(false);
   });
 }
@@ -1226,25 +1101,23 @@ function next(){
 }
 
 /* ---------- stats ---------- */
-const defStats = {played:0, best:0, last:0, sum:0, shinies:0, packs:0, bestPull:null, bestDaily:0, bestFree:0, freeRuns:0};
-/* older saves used a daily/free split; fold those numbers into the single run stats */
-const getStats = () => {
-  const s = Object.assign({}, defStats, store.get(K("stats"), {}));
-  s.best = Math.max(s.best, s.bestDaily, s.bestFree); s.played += s.freeRuns; s.freeRuns = 0; s.bestDaily = 0; s.bestFree = 0;
-  return s;
-};
+const defStats = {played:0, streak:0, lastDay:"", bestDaily:0, bestFree:0, freeRuns:0, shinies:0, packs:0, bestPull:null, daily:null};
+const getStats = () => Object.assign({}, defStats, store.get(K("stats"), {}));
 function finish(){
   if (st.counted) return;
   st.counted = true;
   const s = getStats(), all = run.flat(), t = runTotal();
   s.shinies += all.filter(c => c.shiny).length; s.packs += PACKS;
   const b = bestOf(all); if (!s.bestPull || b.pts > s.bestPull.pts) s.bestPull = {id:b.id, pts:b.pts, t:b.t, shiny:b.shiny};
-  s.played++; s.best = Math.max(s.best, t); s.last = t; s.sum += t;
+  if (mode === "daily") {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    s.streak = s.lastDay === keyOf(y) ? s.streak + 1 : 1; s.lastDay = key; s.played++; s.bestDaily = Math.max(s.bestDaily, t); s.daily = {key, score:t};
+  } else { s.freeRuns++; s.bestFree = Math.max(s.bestFree, t); }
   store.set(K("stats"), s);
 }
 function showStats(){
   const s = getStats(), rows = [
-    ["Runs played", s.played], ["Best run", fmt(s.best)], ["Last run", s.played ? fmt(s.last) : "—"], ["Average run", s.played && s.sum ? fmt(s.sum / s.played) : "—"],
+    ["Dailies played", s.played], ["Daily streak", s.streak], ["Best daily", fmt(s.bestDaily)], ["Best free run", fmt(s.bestFree)],
     ["Packs opened", s.packs], ["Shinies", s.shinies],
     ["Best pull", s.bestPull ? nameOf(s.bestPull.id) + " · " + fmt(s.bestPull.pts) : "—"],
   ];
@@ -1281,11 +1154,12 @@ function setUser(u){
   const a = u && accounts()[u];
   $("#authBtn").textContent = a ? a.display : "Log in";
   syncAdminUi();
-  /* switching accounts is a full reset: close anything open, drop the old run, land on the new account's own run (or a fresh random pack) */
+  /* switching accounts is a full reset: close anything open, drop the old run, land on the new account's own daily */
   document.querySelectorAll("dialog[open]").forEach(d => d.close());
   $("#loading").hidden = true;
+  mode = "daily";
   window.scrollTo(0, 0);
-  startRun(false);
+  startDaily();
 }
 async function submitAuth(e){
   e.preventDefault();
@@ -1314,25 +1188,27 @@ const isAdmin = () => !!user && ADMINS.includes(user);
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 function syncAdminUi(){ $("#adminBtn").hidden = !isAdmin(); }
 function renderAdmin(){
-  const all = accounts();
+  const all = accounts(), today = keyOf(new Date());
   $("#admSub").textContent = "Signed in as " + accounts()[user].display + ". Changes apply to accounts stored in this browser.";
   const users = Object.keys(all);
   $("#admTbl").innerHTML = users.length
-    ? "<tr><th>Player</th><th>Created</th><th>Current run</th><th>Best</th><th>Runs</th><th>Actions</th></tr>" + users.map(u => {
-        const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {})), best = Math.max(s.best, s.bestDaily, s.bestFree);
-        const r = (store.get("packdle:u:" + u + ":run", null) || {}).st;
-        const status = r ? (r.pack >= PACKS ? "finished" : r.ripped ? "in progress" : "not started") : "not started";
+    ? "<tr><th>Player</th><th>Created</th><th>Today</th><th>Best</th><th>Streak</th><th>Actions</th></tr>" + users.map(u => {
+        const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {}));
+        const d = store.get("packdle:u:" + u + ":day:" + today, null);
+        const status = d ? (d.pack >= PACKS ? "finished" : d.ripped ? "in progress" : "not started") : "not started";
         return "<tr><td>" + esc(all[u].display) + (ADMINS.includes(u) ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(all[u].created || 0).toLocaleDateString() +
-          '</td><td class="n">' + status + '</td><td class="n">' + (best ? fmt(best) : "—") + '</td><td class="n">' + (s.played + s.freeRuns) + '</td><td><span class="acts">' +
-          '<button data-act="reset" data-u="' + esc(u) + '">New pack</button><button data-act="pw" data-u="' + esc(u) + '">New password</button>' +
+          '</td><td class="n">' + status + '</td><td class="n">' + (s.bestDaily ? fmt(s.bestDaily) : "—") + '</td><td class="n">' + s.streak + '</td><td><span class="acts">' +
+          '<button data-act="reset" data-u="' + esc(u) + '">Reset daily</button><button data-act="pw" data-u="' + esc(u) + '">New password</button>' +
           (u === user ? "" : '<button class="danger" data-act="del" data-u="' + esc(u) + '">Delete</button>') + "</span></td></tr>";
       }).join("")
     : "";
 }
-function resetRun(u){
-  /* drops the account's current run so its next visit deals a fresh random pack (stats already earned stay) */
-  localStorage.removeItem("packdle:u:" + u + ":run");
-  if (u === user) startRun(true);
+function resetDaily(u){
+  const today = keyOf(new Date());
+  localStorage.removeItem("packdle:u:" + u + ":day:" + today);
+  const sk = "packdle:u:" + u + ":stats", s = store.get(sk, null);
+  if (s && s.daily && s.daily.key === today) { s.played = Math.max(0, (s.played || 0) - 1); s.daily = null; store.set(sk, s); }
+  if (u === user) startDaily();
 }
 function openAdmin(){
   if (!isAdmin()) return;
@@ -1369,7 +1245,7 @@ async function adminAction(e){
   const b = e.target.closest("button[data-act]"); if (!b || !isAdmin()) return;
   const u = b.dataset.u, all = accounts(), name = all[u] && all[u].display;
   if (!name) return;
-  if (b.dataset.act === "reset") { resetRun(u); toast("Dealt " + name + " a fresh pack."); }
+  if (b.dataset.act === "reset") { resetDaily(u); toast("Reset today's daily for " + name + "."); }
   else if (b.dataset.act === "pw") {
     const pw = await askText("New password for " + name, "New password (at least 6 characters)", 6);
     if (pw === null) return;
@@ -1389,7 +1265,7 @@ $("#admPreview").addEventListener("click", () => {
   const id = Math.min(MAX_ID, Math.max(1, parseInt($("#admId").value, 10) || 25)), t = +$("#admRar").value, shiny = $("#admShiny").checked;
   openZoomCard({id, t, shiny});
 });
-$("#admResetMine").addEventListener("click", () => { if (!isAdmin()) return; resetRun(user); renderAdmin(); toast("Dealt you a fresh pack."); });
+$("#admResetMine").addEventListener("click", () => { if (!isAdmin()) return; resetDaily(user); renderAdmin(); toast("Your daily was reset."); });
 $("#admExport").addEventListener("click", async () => {
   if (!isAdmin()) return;
   const dump = {}; Object.keys(localStorage).filter(k => k.startsWith("packdle:") && k !== "packdle:bulk2").forEach(k => dump[k] = store.get(k, null));
@@ -1414,15 +1290,15 @@ $("#cdOrder").addEventListener("click", () => openCards(false));
 $("#cdBest").addEventListener("click", () => openCards(true));
 
 function openBoard(){
-  const all = accounts();
+  const all = accounts(), today = keyOf(new Date());
   const rows = Object.keys(all).map(u => {
     const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {}));
-    return {u, name:all[u].display, best:Math.max(s.best, s.bestDaily, s.bestFree), last:s.played ? s.last : 0, runs:s.played + s.freeRuns};
-  }).sort((a, b) => b.best - a.best || b.runs - a.runs);
-  $("#boardSub").textContent = rows.length ? "Everyone with an account in this browser, ranked by best single run. Every run is a fresh random pack." : "No accounts yet. Sign up and finish a run to appear here.";
+    return {u, name:all[u].display, today:s.daily && s.daily.key === today ? s.daily.score : null, best:s.bestDaily, streak:s.streak};
+  }).sort((a, b) => (b.today ?? -1) - (a.today ?? -1) || b.best - a.best);
+  $("#boardSub").textContent = rows.length ? "Everyone with an account in this browser. Today is Daily #" + dayNo + "." : "No accounts yet. Sign up and finish a daily run to appear here.";
   $("#boardTbl").innerHTML = rows.length
-    ? "<tr><th>#</th><th>Player</th><th>Best run</th><th>Last run</th><th>Runs</th></tr>" + rows.map((r, i) =>
-      '<tr><td class="n">' + (i+1) + '</td><td class="' + (r.u === user ? "me" : "") + '">' + r.name.replace(/[<>&]/g, "") + '</td><td class="n">' + (r.best ? fmt(r.best) : "—") + '</td><td class="n">' + (r.last ? fmt(r.last) : "—") + '</td><td class="n">' + r.runs + '</td></tr>').join("")
+    ? "<tr><th>#</th><th>Player</th><th>Today</th><th>Best daily</th><th>Streak</th></tr>" + rows.map((r, i) =>
+      '<tr><td class="n">' + (i+1) + '</td><td class="' + (r.u === user ? "me" : "") + '">' + r.name.replace(/[<>&]/g, "") + '</td><td class="n">' + (r.today === null ? "—" : fmt(r.today)) + '</td><td class="n">' + (r.best ? fmt(r.best) : "—") + '</td><td class="n">' + r.streak + '</td></tr>').join("")
     : "";
   $("#boardDlg").showModal();
 }
@@ -1431,7 +1307,7 @@ function openBoard(){
 function shareText(t, rank, top){
   const grid = run.map(p => p.map(c => c.shiny ? "✨" : RAR[c.t].sq).join("")).join("\n");
   const bg = run.flatMap(badgesFor), bp = bg.reduce((a, b) => a + b.pts, 0);
-  return "PACKDLE · RNG race\n" + fmt(t) + " pts · " + rank + " (top " + top + ")\n" + grid +
+  return (mode === "daily" ? "POKEPACKDLE #" + dayNo : "POKEPACKDLE free run") + "\n" + fmt(t) + " pts · " + rank + " (top " + top + ")\n" + grid +
     "\n" + bg.length + (bg.length === 1 ? " badge" : " badges") + (bg.length ? " (+" + fmt(bp) + ") " + bg.map(b => b.i).join("") : "");
 }
 function renderResults(){
@@ -1453,7 +1329,8 @@ function renderResults(){
     '</table></div></div>' +
     '<pre class="grid-share">' + text.split("\n").slice(2).join("\n") + '</pre>' +
     '<div class="controls" style="justify-content:flex-start;margin-top:0"><button class="btn" id="shareBtn">Copy result</button><button class="btn ghost" id="checkBtn">Check cards</button>' +
-    '<button class="btn" id="againBtn" style="margin-left:auto">Open a new pack</button></div>';
+    '<button class="btn ghost" id="againBtn">' + (mode === "daily" ? "Play free run" : "New free run") + '</button></div>' +
+    '<p class="note" id="nextDaily"></p>';
   $("#bestCard").append(cardEl(b, 0, true));
   $("#shareBtn").onclick = async () => {
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it anywhere."); }
@@ -1463,8 +1340,12 @@ function renderResults(){
       ta.remove(); toast(ok ? "Copied. Paste it anywhere." : "Couldn't copy. Select the grid above and copy it by hand.");
     }
   };
-  $("#againBtn").onclick = () => { window.scrollTo(0, 0); startRun(true); };
+  $("#againBtn").onclick = startFree;
   $("#checkBtn").onclick = () => openCards(false);
+  if (mode === "daily") {
+    const n = new Date(); const tm = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n;
+    $("#nextDaily").textContent = "Next daily in " + Math.floor(tm/36e5) + "h " + Math.floor(tm % 36e5 / 6e4) + "m.";
+  }
 }
 let toastT = 0;
 function toast(m){ const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800); }
@@ -1499,6 +1380,8 @@ document.addEventListener("pointerout", e => {
 });
 $("#flipAll").addEventListener("click", flipAll);
 $("#nextBtn").addEventListener("click", next);
+$("#tabDaily").addEventListener("click", () => { if (mode !== "daily") startDaily(); });
+$("#tabFree").addEventListener("click", () => { if (mode !== "free") startFree(); });
 $("#statsBtn").addEventListener("click", showStats);
 $("#boardBtn").addEventListener("click", openBoard);
 $("#muteBtn").addEventListener("click", () => { sfx.setMuted(!sfx.muted); syncMuteUi(); sfx.badge(); });
@@ -1520,12 +1403,12 @@ if (saved && accounts()[saved]) { user = saved; $("#authBtn").textContent = acco
   $("#loading").hidden = false;
   await loadBulk();
   $("#loading").hidden = true;
-  startRun(false);
-  if (!dataOk) toast("Couldn't load Pokémon data. Packs need a connection, so check it and reload.");
+  startDaily();
+  if (!dataOk) toast("Couldn't load Pokémon data. Free play works with estimates, but the daily needs a connection.");
   $("#loadRetry").addEventListener("click", async () => {
     $("#loadRetry").hidden = true; $("#loading span").textContent = "Loading Pokémon data…";
     if (!dataOk) await loadBulk();
-    startRun(false);
+    startDaily();
   });
 })();
 })();
