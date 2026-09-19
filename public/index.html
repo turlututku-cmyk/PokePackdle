@@ -129,7 +129,7 @@ header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-block
 .hd{display:flex; align-items:center; gap:1.6cqw; min-height:9cqw}
 .stg{display:flex; flex-direction:column; font:800 max(6px,3.9cqw)/1.05 var(--body); font-style:italic; text-transform:uppercase; letter-spacing:.02em; padding:.8cqw 1.6cqw; border-radius:1.4cqw; background:rgba(255,255,255,.55); color:#1d1d1a; white-space:nowrap}
 .stg small{font-size:max(5px,3cqw); font-weight:600; text-transform:none; opacity:.8}
-.nm{flex:1; min-width:0; font:800 max(9px,7.6cqw)/1 var(--body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.nm{flex:1; min-width:0; font:800 max(9px,7.6cqw)/1 var(--body); font-size:calc(max(9px,7.6cqw) * var(--nf,1)); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .nm sup{font-size:.6em; color:#b07a00; margin-left:.3em}
 .hp{display:flex; align-items:center; gap:1cqw; font:800 max(9px,7.4cqw)/1 var(--body); white-space:nowrap}
 .hp small{font-size:max(5px,3.6cqw); margin-right:-.4cqw}
@@ -218,7 +218,7 @@ header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-block
 .card.flipped .inner{transform:rotateY(calc(180deg + var(--ry,0deg))) rotateX(var(--rx,0deg))}
 @container (max-width:118px){
   .stg,.evo,.dex,.atks,.ft,.hp small,.meta .rs{display:none}
-  .nm{font-size:max(8px,10cqw)}
+  .nm{font-size:calc(max(8px,10cqw) * var(--nf,1))}
   .hp{font-size:max(8px,10cqw)}
   .art{border-width:.6cqw}
   .meta{justify-content:center}
@@ -533,7 +533,7 @@ const RAR = [
   {k:"Holo Rare",  ct:"Holo",        mult:1.8, w:4,   col:"#a978ff", sq:"🟪", ex:"Starter finals & pseudo-legendaries"},
   {k:"Ultra Rare", ct:"ex",          mult:2.5, w:1.5, col:"#ff9a3c", sq:"🟧", ex:"Legendaries"},
   {k:"Secret Rare",ct:"Full Art ex", mult:3.5, w:0.4, col:"#ff4f8b", sq:"🟥", ex:"Mythicals"},
-  {k:"Crown Rare", ct:"VMAX",        mult:5,   w:0.1, col:"#ffd23f", sq:"🟨", ex:"Charizard, Pikachu, Mewtwo, Rayquaza, Arceus…"},
+  {k:"Crown Rare", ct:"Crown Rare",  mult:5,   w:0.1, col:"#ffd23f", sq:"🟨", ex:"Charizard, Pikachu, Mewtwo, Rayquaza, Arceus…"},
 ];
 const TOTALW = RAR.reduce((a, r) => a + r.w, 0);
 const CROWN = [6,25,150,249,250,384,487,493];
@@ -842,7 +842,17 @@ function updateHud(animate){
 }
 
 /* ---------- views ---------- */
-function show(v){ for (const id of ["viewPack","viewCards","viewResults"]) $("#" + id).hidden = id !== v; }
+/* shrink each card name in small steps until it fits its header, instead of cutting it off with "…" */
+function fitNames(root){
+  (root || document).querySelectorAll(".nm").forEach(el => {
+    let nf = 1; el.style.setProperty("--nf", "1");
+    while (el.scrollWidth > el.clientWidth + 1 && nf > 0.42) { nf -= 0.04; el.style.setProperty("--nf", nf.toFixed(2)); }
+  });
+}
+function show(v){
+  for (const id of ["viewPack","viewCards","viewResults"]) $("#" + id).hidden = id !== v;
+  fitNames($("#" + v));   /* names can only be measured once their view is visible */
+}
 function render(){
   bonusOn = true;
   updateHud(false);
@@ -1048,7 +1058,7 @@ function openZoomCard(c){
   const el = cardEl(c, 0, true); el.classList.add("zoom");
   const wrap = document.createElement("div"); wrap.className = "zwrap"; wrap.append(el);
   wrap.insertAdjacentHTML("beforeend", scorePanel(c));
-  $("#zoomBox").replaceChildren(wrap); $("#zoomDlg").showModal();
+  $("#zoomBox").replaceChildren(wrap); $("#zoomDlg").showModal(); fitNames($("#zoomBox"));
 }
 const openZoom = src => openZoomCard(src._card);
 function cardEl(c, i, flipped){
@@ -1220,6 +1230,7 @@ async function submitAuth(e){
     if (!r) { err.textContent = "Couldn't reach the game server. Check your connection and try again."; return; }
     if (!r.ok) { err.textContent = r.data.error === "taken" ? "That username is taken. Pick another or log in." : r.data.error === "badlogin" ? "Wrong username or password." : (r.data.message || "Something went wrong. Try again."); return; }
     store.set("packdle:token", r.data.token);
+    store.set("packdle:admin", !!(r.data.user && r.data.user.admin));
     const mirror = accounts(); mirror[u] = Object.assign({}, mirror[u], {display:r.data.user.display, cloud:true, created:(mirror[u] && mirror[u].created) || Date.now()}); store.set("packdle:users", mirror);
     toast(authMode === "up" ? "Welcome, " + r.data.user.display + "!" : "Welcome back, " + r.data.user.display + "!");
     $("#authDlg").close();
@@ -1245,10 +1256,55 @@ async function submitAuth(e){
 }
 /* ---------- admin panel ---------- */
 const ADMINS = ["cdukinggd"];
-const isAdmin = () => !cloudOn() && !!user && ADMINS.includes(user);   /* the admin panel only manages accounts stored in this browser */
+/* on the shared server, admins are named on the server and it checks every admin action; this flag only decides whether the button shows */
+const isAdmin = () => !!user && (cloudOn() ? !!store.get("packdle:admin", false) : ADMINS.includes(user));
+async function refreshAdmin(){
+  if (!cloudOn() || !user || !store.get("packdle:token", null)) return;
+  try {
+    const r = await api("/api/me");
+    if (r.ok) store.set("packdle:admin", !!(r.data.user && r.data.user.admin));
+    else if (r.status === 401) { store.set("packdle:token", null); store.set("packdle:admin", false); }
+  } catch {}
+  syncAdminUi();
+}
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 function syncAdminUi(){ $("#adminBtn").hidden = !isAdmin(); }
+async function renderAdminCloud(){
+  $("#admSub").textContent = "Admin for the shared server. Changes here apply to every player.";
+  $("#admTbl").innerHTML = '<tr><td class="note">Loading players…</td></tr>';
+  let r; try { r = await api("/api/admin/users?day=" + encodeURIComponent(todayKey())); } catch { r = null; }
+  if (!r || !r.ok) { $("#admTbl").innerHTML = '<tr><td class="note">' + (r && r.status === 403 ? "This account isn't an admin on the server." : "Couldn't load the players. Check your connection.") + "</td></tr>"; return; }
+  const rows = r.data.users || [];
+  $("#admTbl").innerHTML = rows.length
+    ? "<tr><th>Player</th><th>Created</th><th>Today</th><th>Best</th><th>Days</th><th>Actions</th></tr>" + rows.map(u =>
+        "<tr><td>" + esc(u.name) + (u.admin ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(u.created || 0).toLocaleDateString() +
+        '</td><td class="n">' + (u.today == null ? "—" : fmt(u.today)) + '</td><td class="n">' + (u.best == null ? "—" : fmt(u.best)) + '</td><td class="n">' + u.days + '</td><td><span class="acts">' +
+        '<button data-act="pw" data-u="' + esc(u.name) + '">New password</button><button data-act="clear" data-u="' + esc(u.name) + '">Clear today</button>' +
+        (u.admin ? "" : '<button class="danger" data-act="del" data-u="' + esc(u.name) + '">Delete</button>') + "</span></td></tr>").join("")
+    : "";
+}
+async function adminActionCloud(b){
+  const name = b.dataset.u, act = b.dataset.act;
+  try {
+    if (act === "pw") {
+      const pw = await askText("New password for " + name, "New password (at least 6 characters)", 6);
+      if (pw === null) return;
+      const r = await api("/api/admin/password", {name, password:pw});
+      toast(r.ok ? "Password updated for " + name + "." : (r.data.message || "Couldn't change the password."));
+    } else if (act === "clear") {
+      if (!(await askConfirm("Clear " + name + "'s score for today? It disappears from the leaderboard.", "Clear score"))) return;
+      const r = await api("/api/admin/clearscore", {name, day:todayKey()});
+      toast(r.ok ? (r.data.removed ? "Cleared " + name + "'s score for today." : name + " has no score for today.") : (r.data.message || "Couldn't clear the score."));
+    } else if (act === "del") {
+      if (!(await askConfirm("Delete " + name + " and all their scores from the server? This can't be undone.", "Delete"))) return;
+      const r = await api("/api/admin/delete", {name});
+      toast(r.ok ? "Deleted " + name + "." : (r.data.message || "Couldn't delete that account."));
+    }
+  } catch { toast("Couldn't reach the game server."); }
+  renderAdminCloud();
+}
 function renderAdmin(){
+  if (cloudOn()) return renderAdminCloud();
   const all = accounts();
   $("#admSub").textContent = "Signed in as " + accounts()[user].display + ". Changes apply to accounts stored in this browser.";
   const users = Object.keys(all);
@@ -1272,6 +1328,7 @@ function resetRun(u){
 function openAdmin(){
   if (!isAdmin()) return;
   $("#admRar").innerHTML = RAR.map((r, k) => '<option value="' + k + '">' + r.k + "</option>").join("");
+  $("#admExport").hidden = $("#admWipe").hidden = cloudOn();   /* those two act on this browser's own storage */
   renderAdmin(); $("#adminDlg").showModal();
 }
 /* in-page replacements for confirm() / prompt(), which some embedded browsers block */
@@ -1302,6 +1359,7 @@ function askText(title, label, min){
 }
 async function adminAction(e){
   const b = e.target.closest("button[data-act]"); if (!b || !isAdmin()) return;
+  if (cloudOn()) return adminActionCloud(b);
   const u = b.dataset.u, all = accounts(), name = all[u] && all[u].display;
   if (!name) return;
   if (b.dataset.act === "reset") { resetRun(u); toast("Dealt " + name + " a fresh pack."); }
@@ -1344,6 +1402,7 @@ function openCards(best){
   $("#cdSub").textContent = all.length + " cards · " + fmt(all.reduce((a, c) => a + c.pts, 0)) + " card points. Click any card for its score breakdown.";
   $("#cdGrid").replaceChildren(...list.map((c, i) => cardEl(c, i, true)));
   if (!$("#cardsDlg").open) $("#cardsDlg").showModal();
+  fitNames($("#cdGrid"));
 }
 $("#cdOrder").addEventListener("click", () => openCards(false));
 $("#cdBest").addEventListener("click", () => openCards(true));
@@ -1413,6 +1472,7 @@ function renderResults(){
     }
   };
   $("#checkBtn").onclick = () => openCards(false);
+  fitNames($("#viewResults"));
   /* one pack a day: show when the next one unlocks, and offer it once the day has rolled over */
   const tick = () => {
     const el = $("#nextPack"); if (!el || $("#viewResults").hidden) return;
@@ -1480,7 +1540,7 @@ $("#auTabIn").addEventListener("click", () => setAuthMode("in"));
 $("#auTabUp").addEventListener("click", () => setAuthMode("up"));
 $("#auCancel").addEventListener("click", () => $("#authDlg").close());
 $("#authForm").addEventListener("submit", submitAuth);
-$("#logoutBtn").addEventListener("click", () => { $("#acctDlg").close(); store.set("packdle:session", null); store.set("packdle:token", null); setUser(null); toast("Logged out."); });
+$("#logoutBtn").addEventListener("click", () => { $("#acctDlg").close(); store.set("packdle:session", null); store.set("packdle:token", null); store.set("packdle:admin", false); setUser(null); toast("Logged out."); });
 
 const saved = store.get("packdle:session", null);
 if (saved && accounts()[saved] && (!cloudOn() || store.get("packdle:token", null))) { user = saved; $("#authBtn").textContent = accounts()[saved].display; syncAdminUi(); }
@@ -1489,7 +1549,9 @@ if (saved && accounts()[saved] && (!cloudOn() || store.get("packdle:token", null
   await loadBulk();
   $("#loading").hidden = true;
   startRun(false);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitNames(document));   /* re-fit once the web fonts have loaded */
   postScore();   /* retry a score that couldn't be posted last time */
+  refreshAdmin();
   if (!dataOk) toast("Couldn't load Pokémon data. Packs need a connection, so check it and reload.");
   $("#loadRetry").addEventListener("click", async () => {
     $("#loadRetry").hidden = true; $("#loading span").textContent = "Loading Pokémon data…";
