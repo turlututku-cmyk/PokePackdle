@@ -2,9 +2,9 @@ name = "pokepackdle"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# the game page (public/index.html) and the server (worker.js) live at the same address
-[assets]
-directory = "./public"
+# Usernames that are admins on the server (comma separated). Register these accounts first, before sharing the game.
+[vars]
+ADMINS = "CdukingGD"
 
 [[d1_databases]]
 binding = "DB"
