@@ -325,6 +325,11 @@ dialog.huge{width:min(1040px,calc(100vw - 24px))}
 .cgrid .card{animation:none}
 @media (max-width:760px){.cgrid{grid-template-columns:repeat(2,1fr)}}
 dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto}
+.nextchip{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:7px 14px; cursor:pointer; color:var(--muted); font:600 12px/1 var(--mono); letter-spacing:.04em; white-space:nowrap}
+.nextchip b{color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums}
+.nextchip.ready{background:var(--gold); border-color:var(--gold); color:#2a2100; font-weight:800}
+.nextchip[hidden]{display:none}
+.nextchip:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
 .iconbtn.admin{background:#ff4f8b; color:#fff; border-color:#ff4f8b}
 .iconbtn[hidden]{display:none}
 .adm-row{display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-top:10px}
@@ -368,6 +373,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
       <button class="tab" role="tab" id="tabDaily" aria-selected="true">Daily pack</button>
       <button class="tab" role="tab" id="tabFree" aria-selected="false">Unlimited</button>
     </div>
+    <button class="nextchip" id="nextChip" hidden aria-live="off"></button>
     <button class="iconbtn" id="muteBtn" aria-pressed="false" aria-label="Sound on">Sound on</button>
     <button class="iconbtn admin" id="adminBtn" hidden>Admin</button>
     <button class="iconbtn" id="boardBtn">Board</button>
@@ -594,6 +600,7 @@ const BADGES = [
   {k:"shiny",   i:"✨", n:"Shiny Sighting",pts:75, d:"You pulled a shiny",                                  f:cs => cs.some(c => c.shiny)},
   {k:"rainbow", i:"🌈", n:"Rainbow Pack", pts:100, d:"5 or more different rarities in one pack",            f:cs => new Set(cs.map(c => c.t)).size >= 5},
   {k:"legend2", i:"👑", n:"Legend Pair",  pts:200, d:"2 or more cards are Ultra Rare or better",            f:cs => count(cs, c => c.t >= 4) >= 2},
+  {k:"zard",    i:"🔥", n:"Crown Charizard",pts:1000, d:"You pulled Charizard as a Crown Rare",           f:cs => cs.some(c => c.id === 6 && c.t === 6)},
 ];
 const bTier = pts => pts <= 20 ? 0 : pts <= 40 ? 1 : pts <= 75 ? 2 : pts <= 200 ? 4 : 6;
 const badgesFor = cs => BADGES.filter(b => b.f(cs));
@@ -1488,9 +1495,9 @@ function renderResults(){
     if (tm <= 0 || runDay !== todayKey()) {
       el.innerHTML = '<button class="btn" id="againBtn">Open today\'s pack</button>';
       $("#againBtn").onclick = () => { window.scrollTo(0, 0); startRun(false); };
-    } else el.textContent = "You've opened today's pack. The next one unlocks in " + Math.floor(tm / 36e5) + "h " + Math.floor(tm % 36e5 / 6e4) + "m.";
+    } else el.textContent = "You've opened today's pack. The next one unlocks in " + hms(tm) + ".";
   };
-  tick(); clearInterval(window.__nextTimer); window.__nextTimer = setInterval(tick, 30000);
+  tick(); clearInterval(window.__nextTimer); window.__nextTimer = setInterval(tick, 1000);
 }
 let toastT = 0;
 function toast(m){ const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800); }
@@ -1526,6 +1533,19 @@ document.addEventListener("pointerout", e => {
 $("#flipAll").addEventListener("click", flipAll);
 $("#nextBtn").addEventListener("click", next);
 $("#tabDaily").addEventListener("click", () => { if (mode !== "daily") startRun(false); });
+/* countdown to the next daily pack, visible on every tab once today's pack is used up */
+const hms = ms => { const s = Math.max(0, Math.floor(ms / 1000)), p = n => String(n).padStart(2, "0"); return p(Math.floor(s / 3600)) + ":" + p(Math.floor(s % 3600 / 60)) + ":" + p(s % 60); };
+function updateNextChip(){
+  const chip = $("#nextChip"), r = store.get(K("run"), null), n = new Date();
+  const used = r && r.st && r.st.pack >= PACKS;   /* the saved daily run is finished */
+  if (!used) { chip.hidden = true; return; }
+  chip.hidden = false;
+  if (r.day === todayKey()) {
+    chip.className = "nextchip"; chip.innerHTML = "Next pack in <b>" + hms(new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n) + "</b>";
+  } else { chip.className = "nextchip ready"; chip.textContent = "New pack ready"; }
+}
+$("#nextChip").addEventListener("click", () => { window.scrollTo(0, 0); startRun(false); });
+updateNextChip(); setInterval(updateNextChip, 1000);
 $("#tabFree").addEventListener("click", () => { if (mode !== "free") startFree(); });
 $("#statsBtn").addEventListener("click", showStats);
 $("#boardBtn").addEventListener("click", openBoard);
