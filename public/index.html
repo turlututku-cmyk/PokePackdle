@@ -27,16 +27,16 @@ body{
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
 }
 button{font:inherit; color:inherit}
-.wrap{max-width:1040px; margin:0 auto; padding:16px 16px 64px}
+.wrap{max-width:1120px; margin:0 auto; padding:16px 16px 64px}
 
 /* header */
-header{display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding-block:4px 14px}
-.logo{font:400 30px/1 var(--display); letter-spacing:.02em; margin:0; margin-right:auto}
+header{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-block:4px 14px}
+.logo{font:400 26px/1 var(--display); letter-spacing:.02em; margin:0; margin-right:auto}
 .logo span{color:var(--gold)}
 .tabs{display:flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:999px; background:rgba(0,0,0,.18)}
-.tab{border:0; background:none; padding:8px 16px; border-radius:999px; cursor:pointer; font-weight:800; font-size:14px; color:var(--muted)}
+.tab{border:0; background:none; padding:8px 13px; border-radius:999px; cursor:pointer; font-weight:800; font-size:14px; color:var(--muted)}
 .tab[aria-selected="true"]{background:var(--gold); color:#2a2100}
-.iconbtn{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:8px 14px; cursor:pointer; font-weight:800; font-size:14px; color:var(--ink)}
+.iconbtn{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:800; font-size:14px; color:var(--ink)}
 .tab:focus-visible,.iconbtn:focus-visible,.btn:focus-visible,.card:focus-visible,.pack:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
 
 /* hud */
@@ -325,7 +325,7 @@ dialog.huge{width:min(1040px,calc(100vw - 24px))}
 .cgrid .card{animation:none}
 @media (max-width:760px){.cgrid{grid-template-columns:repeat(2,1fr)}}
 dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto}
-.nextchip{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:7px 14px; cursor:pointer; color:var(--muted); font:600 12px/1 var(--mono); letter-spacing:.04em; white-space:nowrap}
+.nextchip{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:7px 12px; cursor:pointer; color:var(--muted); font:600 12px/1 var(--mono); letter-spacing:0; white-space:nowrap}
 .nextchip b{color:var(--gold); font-weight:700; font-variant-numeric:tabular-nums}
 .nextchip.ready{background:var(--gold); border-color:var(--gold); color:#2a2100; font-weight:800}
 .nextchip[hidden]{display:none}
@@ -349,7 +349,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 .field input{font:inherit; font-size:16px; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:rgba(0,0,0,.28); color:var(--ink)}
 .field input:focus-visible{outline:3px solid var(--gold); outline-offset:1px}
 .err{color:#ff8f8f; font-size:14px; min-height:1.4em; margin:0}
-.iconbtn.acct{background:var(--gold); color:#2a2100; border-color:var(--gold)}
+.iconbtn.acct{max-width:136px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:var(--gold); color:#2a2100; border-color:var(--gold)}
 #boardTbl td.me{color:var(--gold); font-weight:800}
 @media (max-width:600px){
   .logo{font-size:24px}
@@ -1281,7 +1281,7 @@ async function renderAdminCloud(){
   $("#admTbl").innerHTML = '<tr><td class="note">Loading players…</td></tr>';
   let r; try { r = await api("/api/admin/users?day=" + encodeURIComponent(todayKey())); } catch { r = null; }
   if (!r || !r.ok) { $("#admTbl").innerHTML = '<tr><td class="note">' + (r && r.status === 403 ? "This account isn't an admin on the server." : "Couldn't load the players. Check your connection.") + "</td></tr>"; return; }
-  const rows = r.data.users || [];
+  const rows = (r.data.users || []).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));   /* A to Z */
   $("#admTbl").innerHTML = rows.length
     ? "<tr><th>Player</th><th>Created</th><th>Today</th><th>Best</th><th>Days</th><th>Actions</th></tr>" + rows.map(u =>
         "<tr><td>" + esc(u.name) + (u.admin ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(u.created || 0).toLocaleDateString() +
@@ -1314,7 +1314,7 @@ function renderAdmin(){
   if (cloudOn()) return renderAdminCloud();
   const all = accounts();
   $("#admSub").textContent = "Signed in as " + accounts()[user].display + ". Changes apply to accounts stored in this browser.";
-  const users = Object.keys(all);
+  const users = Object.keys(all).sort((a, b) => a.localeCompare(b, undefined, {sensitivity:"base"}));   /* A to Z */
   $("#admTbl").innerHTML = users.length
     ? "<tr><th>Player</th><th>Created</th><th>Current run</th><th>Best</th><th>Runs</th><th>Actions</th></tr>" + users.map(u => {
         const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {})), best = Math.max(s.best, s.bestDaily, s.bestFree);
@@ -1542,7 +1542,7 @@ function updateNextChip(){
   if (!used) { chip.hidden = true; return; }
   chip.hidden = false;
   if (r.day === todayKey()) {
-    chip.className = "nextchip"; chip.innerHTML = "Next pack in <b>" + hms(new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n) + "</b>";
+    chip.className = "nextchip"; chip.innerHTML = "Next pack <b>" + hms(new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n) + "</b>";
   } else { chip.className = "nextchip ready"; chip.textContent = "New pack ready"; }
 }
 $("#nextChip").addEventListener("click", () => { window.scrollTo(0, 0); startRun(false); });
