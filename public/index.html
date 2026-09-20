@@ -1447,7 +1447,8 @@ function shareText(t, rank, top){
   const grid = run.map(p => p.map(c => c.shiny ? "✨" : RAR[c.t].sq).join("")).join("\n");
   const bg = run.flatMap(badgesFor), bp = bg.reduce((a, b) => a + b.pts, 0);
   return (mode === "daily" ? "POKEPACKDLE · RNG race" : "POKEPACKDLE · practice pack") + "\n" + fmt(t) + " pts · " + rank + " (top " + top + ")\n" + grid +
-    "\n" + bg.length + (bg.length === 1 ? " badge" : " badges") + (bg.length ? " (+" + fmt(bp) + ") " + bg.map(b => b.i).join("") : "");
+    "\n" + bg.length + (bg.length === 1 ? " badge" : " badges") + (bg.length ? " (+" + fmt(bp) + ") " + bg.map(b => b.i).join("") : "") +
+    "\n" + (CLOUD_URL || location.origin) + "/";
 }
 function renderResults(){
   const all = run.flat(), t = runTotal(), p = percentile(t), rank = rankFor(p);
@@ -1466,7 +1467,7 @@ function renderResults(){
     '<tr><td><b>Badges</b></td><td>' + nb + ' earned</td><td>+' + fmt(bonus) + '</td></tr>' +
     '<tr><td><b>Total</b></td><td></td><td>' + fmt(t) + '</td></tr>' +
     '</table></div></div>' +
-    '<pre class="grid-share">' + text.split("\n").slice(2).join("\n") + '</pre>' +
+    '<pre class="grid-share">' + text.split("\n").slice(2, -1).join("\n") + '</pre>' +
     '<div class="controls" style="justify-content:flex-start;margin-top:0"><button class="btn" id="shareBtn">Copy result</button><button class="btn ghost" id="checkBtn">Check cards</button>' +
     '</div><p class="note" id="nextPack" style="margin-top:14px"></p>';
   $("#bestCard").append(cardEl(b, 0, true));
