@@ -27,17 +27,46 @@ body{
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
 }
 button{font:inherit; color:inherit}
-.wrap{max-width:1120px; margin:0 auto; padding:16px 16px 64px}
+.shell{display:flex; align-items:flex-start; width:100%}
+.wrap{flex:1; min-width:0; max-width:1040px; margin:0 auto; padding:24px 20px 64px}
 
-/* header */
-header{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-block:4px 14px}
-.logo{font:400 26px/1 var(--display); letter-spacing:.02em; margin:0; margin-right:auto}
+/* sidebar */
+.side{position:sticky; top:0; flex:none; width:228px; height:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:22px 14px 16px; border-right:1px solid var(--line); background:rgba(0,0,0,.2)}
+.logo{font:400 26px/1 var(--display); letter-spacing:.02em; margin:0 6px 6px}
 .logo span{color:var(--gold)}
-.tabs{display:flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:999px; background:rgba(0,0,0,.18)}
+.nav{display:flex; flex-direction:column; gap:4px}
+.navgroup{display:flex; flex-direction:column; gap:4px}
+.navsep{height:1px; background:var(--line); margin:8px 4px}
+.navbtn{position:relative; display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:11px 12px; border:0; border-radius:10px; background:none; color:var(--muted); font:800 15px var(--body); cursor:pointer}
+.navbtn i{font-style:normal; width:22px; text-align:center; font-size:17px; flex:none}
+.navbtn span{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.navbtn:hover{background:rgba(255,255,255,.07); color:var(--ink)}
+.navbtn[aria-selected="true"]{background:var(--gold); color:#2a2100}
+.navbtn.admin{color:#ff8fb3}
+.navbtn[hidden]{display:none}
+.navbtn .dot{margin-left:auto; width:10px; height:10px; border-radius:50%; background:#ff4f8b; box-shadow:0 0 0 3px rgba(255,79,139,.25); flex:none}
+.navbtn .dot[hidden]{display:none}
+.sidefoot{margin-top:auto; display:flex; flex-direction:column; gap:8px}
+.navbtn.acct{background:var(--gold); color:#2a2100; justify-content:center; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.navbtn.acct:hover{background:#ffdd6b; color:#2a2100}
+.nextchip{text-align:center}
 .tab{border:0; background:none; padding:8px 13px; border-radius:999px; cursor:pointer; font-weight:800; font-size:14px; color:var(--muted)}
+.tabs{display:flex; gap:4px; padding:4px; border:1px solid var(--line); border-radius:999px; background:rgba(0,0,0,.18)}
 .tab[aria-selected="true"]{background:var(--gold); color:#2a2100}
-.iconbtn{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:8px 12px; cursor:pointer; font-weight:800; font-size:14px; color:var(--ink)}
-.tab:focus-visible,.iconbtn:focus-visible,.btn:focus-visible,.card:focus-visible,.pack:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
+.navbtn:focus-visible,.tab:focus-visible,.btn:focus-visible,.card:focus-visible,.pack:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
+@media (max-width:900px){
+  .shell{display:block}
+  .side{position:static; width:auto; height:auto; overflow:visible; flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px; padding:12px 14px 8px; border-right:0; border-bottom:1px solid var(--line)}
+  .logo{font-size:22px; margin:0 auto 0 0}
+  .logo br{display:none}
+  .nav{order:3; width:100%; flex-direction:row; flex-wrap:wrap; gap:4px}
+  .navgroup{flex-direction:row; gap:4px}
+  .navsep{display:none}
+  .navbtn{width:auto; padding:8px 11px; font-size:13px; gap:7px}
+  .navbtn i{width:auto; font-size:15px}
+  .sidefoot{margin:0; flex-direction:row; align-items:center}
+  .wrap{padding:16px 16px 64px}
+}
 
 /* hud */
 .hud{display:grid; grid-template-columns:1.3fr 1fr 1.2fr; gap:0; border-block:1px solid var(--line); margin-bottom:8px}
@@ -323,6 +352,32 @@ dialog.huge{width:min(1040px,calc(100vw - 24px))}
 .cd-head h2{margin:0}
 .cgrid{display:grid; grid-template-columns:repeat(5,1fr); gap:14px}
 .cgrid .card{animation:none}
+.chatlog{flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding:12px 14px; background:rgba(0,0,0,.22); border:1px solid var(--line); border-radius:10px}
+.cmsg .chead{display:flex; align-items:baseline; gap:8px; font-size:13px}
+.cmsg .chead b{color:var(--gold)}
+.cmsg .chead .tag{margin-left:0}
+.cmsg time{font:500 11px var(--mono); color:var(--muted)}
+.cmsg .cdel{margin-left:auto; background:none; border:0; padding:0 2px; cursor:pointer; font:600 12px var(--body); color:#ff8f8f; text-decoration:underline}
+.cmsg .ctext{overflow-wrap:anywhere; margin-top:2px}
+/* pages: Leaderboard, Chat, Inventory, Stats and Admin open in the main area instead of a popup */
+.pg{display:none}
+body.pagemode .wrap > :not(.pg.on){display:none!important}
+.pg.on{display:block; width:100%; margin:0 auto}
+.pg h2{font:400 26px var(--display); margin:0 0 14px}
+.pg .cd-head h2{margin:0}
+#invPg.on{max-width:1000px}
+#adminPg.on{max-width:920px}
+#statsPg.on,#boardPg.on{max-width:760px}
+#chatView.on{display:flex; flex-direction:column; max-width:860px; height:calc(100vh - 88px); min-height:420px}
+@media (max-width:900px){ #chatView.on{height:calc(100vh - 260px); min-height:340px} }
+.chatform{display:flex; gap:8px; margin-top:10px}
+.chatform input{flex:1; min-width:0; background:rgba(0,0,0,.25); border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:10px 12px; font:600 15px var(--body)}
+.chatform input:disabled{opacity:.5}
+.invbar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px}
+.invbar input[type=search], .invbar select{background:rgba(0,0,0,.25); border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:9px 11px; font:600 14px var(--body)}
+.invbar input[type=search]{flex:1; min-width:150px}
+.invcell{position:relative}
+.invcell .qty{position:absolute; top:6px; right:6px; z-index:3; background:var(--gold); color:#2a2100; font:800 12px/1 var(--mono); padding:4px 8px; border-radius:999px; pointer-events:none; box-shadow:0 1px 4px rgba(0,0,0,.4)}
 @media (max-width:760px){.cgrid{grid-template-columns:repeat(2,1fr)}}
 dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:auto}
 .nextchip{border:1px solid var(--line); background:rgba(0,0,0,.18); border-radius:999px; padding:7px 12px; cursor:pointer; color:var(--muted); font:600 12px/1 var(--mono); letter-spacing:0; white-space:nowrap}
@@ -330,8 +385,6 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 .nextchip.ready{background:var(--gold); border-color:var(--gold); color:#2a2100; font-weight:800}
 .nextchip[hidden]{display:none}
 .nextchip:focus-visible{outline:3px solid var(--gold); outline-offset:3px}
-.iconbtn.admin{background:#ff4f8b; color:#fff; border-color:#ff4f8b}
-.iconbtn[hidden]{display:none}
 .adm-row{display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-top:10px}
 .adm-row .field{margin:0; width:130px}
 .adm-row select{font:inherit; font-size:16px; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:rgba(0,0,0,.28); color:var(--ink)}
@@ -352,10 +405,8 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 .field input{font:inherit; font-size:16px; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:rgba(0,0,0,.28); color:var(--ink)}
 .field input:focus-visible{outline:3px solid var(--gold); outline-offset:1px}
 .err{color:#ff8f8f; font-size:14px; min-height:1.4em; margin:0}
-.iconbtn.acct{max-width:136px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:var(--gold); color:#2a2100; border-color:var(--gold)}
 #boardTbl td.me{color:var(--gold); font-weight:800}
 @media (max-width:600px){
-  .logo{font-size:24px}
   .hud{grid-template-columns:1fr 1fr}
   .hud > div:first-child{grid-column:1/-1; border-bottom:1px solid var(--line)}
   .hud > div:nth-child(2){border-left:0}
@@ -369,20 +420,28 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 </style>
 </head>
 <body>
-<div id="page" class="wrap">
-  <header>
-    <h1 class="logo">POKE<span>PACKDLE</span></h1>
-    <div class="tabs" role="tablist" aria-label="Game mode">
-      <button class="tab" role="tab" id="tabDaily" aria-selected="true">Daily pack</button>
-      <button class="tab" role="tab" id="tabFree" aria-selected="false">Unlimited</button>
+<div class="shell">
+<aside class="side" aria-label="Menu">
+  <h1 class="logo">POKE<br><span>PACKDLE</span></h1>
+  <nav class="nav" aria-label="Main">
+    <div class="navgroup" role="tablist" aria-label="Game mode">
+      <button class="navbtn" role="tab" id="tabDaily" aria-selected="true"><i>🎴</i><span>Daily pack</span></button>
+      <button class="navbtn" role="tab" id="tabFree" aria-selected="false"><i>♾️</i><span>Unlimited</span></button>
     </div>
+    <div class="navsep"></div>
+    <button class="navbtn" id="boardBtn"><i>🏆</i><span>Leaderboard</span></button>
+    <button class="navbtn" id="chatBtn" hidden><i>💬</i><span>Chat</span><b class="dot" id="chatDot" hidden aria-label="New messages"></b></button>
+    <button class="navbtn" id="invBtn"><i>🎒</i><span>Inventory</span></button>
+    <button class="navbtn" id="statsBtn"><i>📊</i><span>Stats</span></button>
+    <button class="navbtn" id="muteBtn" aria-pressed="false" aria-label="Sound on"><i>🔊</i><span>Sound on</span></button>
+    <button class="navbtn admin" id="adminBtn" hidden><i>🛠️</i><span>Admin</span></button>
+  </nav>
+  <div class="sidefoot">
     <button class="nextchip" id="nextChip" hidden aria-live="off"></button>
-    <button class="iconbtn" id="muteBtn" aria-pressed="false" aria-label="Sound on">Sound on</button>
-    <button class="iconbtn admin" id="adminBtn" hidden>Admin</button>
-    <button class="iconbtn" id="boardBtn">Board</button>
-    <button class="iconbtn" id="statsBtn">Stats</button>
-    <button class="iconbtn acct" id="authBtn">Log in</button>
-  </header>
+    <button class="navbtn acct" id="authBtn">Log in</button>
+  </div>
+</aside>
+<div id="page" class="wrap">
 
   <section class="hud" aria-label="Scoreboard">
     <div><div class="lbl">Points</div><div class="score" id="score" aria-live="polite">0</div><div class="sub" id="scoreSub"></div></div>
@@ -415,6 +474,68 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 
   <section id="viewResults" class="view results" hidden></section>
 
+  <section id="chatView" class="pg" aria-label="Chat">
+    <div class="cd-head"><h2>Chat</h2><button type="button" class="btn sm ghost danger" id="chatClear" hidden>Clear chat</button></div>
+    <p class="note" id="chatSub" style="margin:0 0 10px"></p>
+    <div class="chatlog" id="chatLog" aria-live="polite"></div>
+    <form id="chatForm" class="chatform" autocomplete="off">
+      <input id="chatInput" maxlength="200" placeholder="Say something…" aria-label="Message">
+      <button class="btn sm" id="chatSend">Send</button>
+    </form>
+  </section>
+  <section id="invPg" class="pg">
+    <div class="cd-head"><h2>Inventory</h2></div>
+    <p class="note" id="invSub" style="margin:0 0 12px"></p>
+    <div class="invbar">
+      <input id="invSearch" type="search" placeholder="Search name…" aria-label="Search by name" autocomplete="off">
+      <select id="invRar" aria-label="Rarity"></select>
+      <select id="invSort" aria-label="Sort">
+        <option value="new">Newest first</option><option value="rar">Rarest first</option><option value="pts">Highest points</option>
+        <option value="dex">Pokédex number</option><option value="name">Name A to Z</option>
+      </select>
+      <label class="chk" style="padding-bottom:0"><input id="invShiny" type="checkbox"> Shiny only</label>
+    </div>
+    <div class="cgrid" id="invGrid"></div>
+    <p class="note" id="invEmpty" hidden></p>
+    <div style="text-align:center; margin-top:14px"><button type="button" class="btn ghost" id="invMore" hidden>Show more</button></div>
+  </section>
+  <section id="statsPg" class="pg">
+    <h2>Your stats</h2>
+    <dl class="stats" id="statsBody"></dl>
+  </section>
+  <section id="adminPg" class="pg">
+    <h2>Admin panel</h2>
+    <p class="note" style="margin-top:0" id="admSub"></p>
+  
+    <div class="lbl" style="margin-top:18px" id="admLbl">Accounts on this browser</div>
+    <div class="scroll"><table class="odds" id="admTbl"></table></div>
+    <div class="pager" id="admPager" hidden>
+      <button type="button" class="btn sm ghost" id="admPrev">Prev</button>
+      <span id="admPageLbl"></span>
+      <button type="button" class="btn sm ghost" id="admNext">Next</button>
+    </div>
+  
+    <div class="lbl" style="margin-top:22px">Card previewer</div>
+    <div class="adm-row">
+      <div class="field"><label for="admId">Pokémon #</label><input id="admId" type="number" min="1" max="1025" value="25"></div>
+      <div class="field"><label for="admRar">Rarity</label><select id="admRar"></select></div>
+      <label class="chk"><input id="admShiny" type="checkbox"> Shiny</label>
+      <button type="button" class="btn sm" id="admPreview">Preview card</button>
+    </div>
+  
+    <div class="lbl" style="margin-top:22px">Tools</div>
+    <div class="adm-row">
+      <button type="button" class="btn sm ghost" id="admResetMine">Deal me a new pack</button>
+      <button type="button" class="btn sm ghost" id="admExport">Copy all data (JSON)</button>
+      <button type="button" class="btn sm ghost danger" id="admWipe">Wipe all game data</button>
+    </div>
+  </section>
+  <section id="boardPg" class="pg">
+    <h2>Leaderboard</h2>
+    <p class="note" style="margin-top:0" id="boardSub"></p>
+    <div class="scroll"><table class="odds" id="boardTbl"></table></div>
+  </section>
+
   <details id="badgeSec" class="badges" hidden>
     <summary id="badgeSum">Badges</summary>
     <ul class="bl" id="badgeList"></ul>
@@ -427,12 +548,9 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
     <div class="scroll"><table class="odds" id="odds"></table></div>
   </details>
 </div>
+</div>
 
-<dialog id="statsDlg">
-  <h2>Your stats</h2>
-  <dl class="stats" id="statsBody"></dl>
-  <form method="dialog"><button class="btn">Close</button></form>
-</dialog>
+
 <dialog id="authDlg">
   <h2 id="authTitle">Log in</h2>
   <div class="tabs" role="tablist" aria-label="Account" style="margin-bottom:16px;width:max-content">
@@ -458,34 +576,6 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
     <button class="btn" id="logoutBtn">Log out</button>
     <form method="dialog"><button class="btn ghost">Close</button></form>
   </div>
-</dialog>
-<dialog id="adminDlg" class="wide">
-  <h2>Admin panel</h2>
-  <p class="note" style="margin-top:0" id="admSub"></p>
-
-  <div class="lbl" style="margin-top:18px">Accounts on this browser</div>
-  <div class="scroll"><table class="odds" id="admTbl"></table></div>
-  <div class="pager" id="admPager" hidden>
-    <button type="button" class="btn sm ghost" id="admPrev">Prev</button>
-    <span id="admPageLbl"></span>
-    <button type="button" class="btn sm ghost" id="admNext">Next</button>
-  </div>
-
-  <div class="lbl" style="margin-top:22px">Card previewer</div>
-  <div class="adm-row">
-    <div class="field"><label for="admId">Pokémon #</label><input id="admId" type="number" min="1" max="1025" value="25"></div>
-    <div class="field"><label for="admRar">Rarity</label><select id="admRar"></select></div>
-    <label class="chk"><input id="admShiny" type="checkbox"> Shiny</label>
-    <button type="button" class="btn sm" id="admPreview">Preview card</button>
-  </div>
-
-  <div class="lbl" style="margin-top:22px">Tools</div>
-  <div class="adm-row">
-    <button type="button" class="btn sm ghost" id="admResetMine">Deal me a new pack</button>
-    <button type="button" class="btn sm ghost" id="admExport">Copy all data (JSON)</button>
-    <button type="button" class="btn sm ghost danger" id="admWipe">Wipe all game data</button>
-  </div>
-  <form method="dialog" style="margin-top:22px"><button class="btn">Close</button></form>
 </dialog>
 <dialog id="confirmDlg" aria-label="Confirm">
   <h2 id="cfTitle">Are you sure?</h2>
@@ -521,12 +611,6 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
   <p class="note" id="cdSub" style="margin:0 0 14px"></p>
   <div class="cgrid" id="cdGrid"></div>
   <form method="dialog" style="margin-top:20px"><button class="btn">Close</button></form>
-</dialog>
-<dialog id="boardDlg">
-  <h2>Leaderboard</h2>
-  <p class="note" style="margin-top:0" id="boardSub"></p>
-  <div class="scroll"><table class="odds" id="boardTbl"></table></div>
-  <form method="dialog" style="margin-top:16px"><button class="btn">Close</button></form>
 </dialog>
 <div id="loading" hidden><span>Loading Pokémon data…</span><button class="btn" id="loadRetry" hidden>Try again</button></div>
 <div id="banner" aria-hidden="true"></div>
@@ -720,7 +804,7 @@ const sfx = (() => {
 })();
 function syncMuteUi(){
   const b = $("#muteBtn"), m = sfx.muted;
-  b.textContent = m ? "Sound off" : "Sound on"; b.setAttribute("aria-pressed", m); b.setAttribute("aria-label", m ? "Sound off" : "Sound on");
+  b.innerHTML = "<i>" + (m ? "🔇" : "🔊") + "</i><span>" + (m ? "Sound off" : "Sound on") + "</span>"; b.setAttribute("aria-pressed", m); b.setAttribute("aria-label", m ? "Sound off" : "Sound on");
 }
 
 /* per-account storage: guests use the bare "packdle:" keys, accounts get their own namespace */
@@ -888,7 +972,7 @@ function show(v){
 function render(){
   bonusOn = true;
   updateHud(false);
-  if (st.pack >= PACKS) { finish(); persist(); show("viewResults"); renderResults(); }
+  if (st.pack >= PACKS) { finish(); recordInv(); persist(); show("viewResults"); renderResults(); }
   else if (!st.ripped) { renderPackView(); show("viewPack"); }
   else { buildCards(); show("viewCards"); }
   renderBadges(st.pack >= PACKS || (st.ripped && st.flipped.every(Boolean)));
@@ -1195,15 +1279,181 @@ function finish(){
   store.set(K("stats"), s);
   if (cloudOn() && user) { store.set("packdle:pending", {user, score:t, day:runDay}); postScore(); }   /* shared leaderboard */
 }
+/* ---------- chat: one shared room on the game server, so it needs the server and a login ---------- */
+let chatLast = 0, chatTimer = 0, chatBusy = false;
+const chatOk = () => cloudOn() && !!user && !!store.get("packdle:token", null);
+const clockOf = ts => new Date(ts).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+function chatRow(m){
+  /* messages go in as text, never as HTML */
+  const row = document.createElement("div"), head = document.createElement("div"), nm = document.createElement("b"), tm = document.createElement("time"), tx = document.createElement("div");
+  row.className = "cmsg"; row.dataset.id = m.id; head.className = "chead"; tx.className = "ctext";
+  nm.textContent = m.name; head.append(nm);
+  if (m.admin) { const t = document.createElement("span"); t.className = "tag"; t.textContent = "admin"; head.append(t); }
+  tm.textContent = clockOf(m.ts); head.append(tm);
+  if (isAdmin()) { const d = document.createElement("button"); d.type = "button"; d.className = "cdel"; d.dataset.id = m.id; d.textContent = "Delete"; head.append(d); }
+  tx.textContent = m.text;
+  row.append(head, tx);
+  return row;
+}
+async function chatPoll(){
+  if (chatBusy || !chatOk() || !inChat()) return;
+  chatBusy = true;
+  try {
+    const log = $("#chatLog"), who = user, r = await api("/api/chat" + (chatLast ? "?after=" + chatLast : ""));
+    if (who !== user) return;
+    if (!r.ok) { if (r.status === 401) $("#chatSub").textContent = "Your login expired. Log in again to chat."; return; }
+    const near = log.scrollHeight - log.scrollTop - log.clientHeight < 60, keep = new Set(r.data.ids);
+    log.querySelectorAll(".cmsg").forEach(el => { if (!keep.has(+el.dataset.id)) el.remove(); });   /* messages an admin deleted */
+    for (const m of r.data.messages) if (!log.querySelector('.cmsg[data-id="' + m.id + '"]')) log.append(chatRow(m));
+    if (r.data.ids.length) chatLast = Math.max(chatLast, ...r.data.ids);
+    if (near || !chatLast) log.scrollTop = log.scrollHeight;
+    if (chatLast) store.set(K("chatSeen"), chatLast);
+    $("#chatDot").hidden = true;
+    $("#chatSub").textContent = log.children.length ? "Everyone who is logged in shares this room. Be kind." : "No messages yet. Say hi!";
+  } catch {} finally { chatBusy = false; }
+}
+function openChat(){
+  const ok = chatOk();
+  $("#chatLog").replaceChildren(); chatLast = 0;
+  $("#chatInput").disabled = $("#chatSend").disabled = !ok;
+  $("#chatClear").hidden = !(ok && isAdmin());
+  $("#chatSub").textContent = ok ? "Loading…" : cloudOn() ? "Log in to read and send messages." : "Chat needs the shared game server.";
+  showPage("chatView");
+  if (ok) { chatPoll(); clearInterval(chatTimer); chatTimer = setInterval(chatPoll, 4000); $("#chatInput").focus(); }
+}
+/* Leaderboard, Chat, Inventory, Stats and Admin are pages: each takes over the main area (where the pack opening area is) until you pick another tab */
+let curPage = null;
+const PAGE_BTN = {chatView:"#chatBtn", boardPg:"#boardBtn", invPg:"#invBtn", statsPg:"#statsBtn", adminPg:"#adminBtn"};
+const inChat = () => curPage === "chatView";
+function showPage(id){
+  leavePage(true);
+  curPage = id;
+  document.body.classList.add("pagemode"); $("#" + id).classList.add("on");
+  $(PAGE_BTN[id]).setAttribute("aria-selected", "true");
+  $("#tabDaily").setAttribute("aria-selected", "false"); $("#tabFree").setAttribute("aria-selected", "false");
+  window.scrollTo(0, 0);
+}
+function leavePage(switching){
+  if (!curPage) return;
+  const id = curPage; curPage = null;
+  if (id === "chatView") clearInterval(chatTimer);
+  $("#" + id).classList.remove("on"); $(PAGE_BTN[id]).removeAttribute("aria-selected");
+  if (switching) return;
+  document.body.classList.remove("pagemode");
+  $("#tabDaily").setAttribute("aria-selected", mode === "daily"); $("#tabFree").setAttribute("aria-selected", mode === "free");
+  fitNames(document);   /* names can only be measured while their cards are visible */
+}
+$("#chatBtn").addEventListener("click", () => { if (curPage !== "chatView") openChat(); });
+$("#chatForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const input = $("#chatInput"), text = input.value.trim();
+  if (!text || !chatOk()) return;
+  $("#chatSend").disabled = true;
+  try {
+    const r = await api("/api/chat", {text});
+    if (r.ok) {
+      input.value = "";
+      const log = $("#chatLog");
+      if (!log.querySelector('.cmsg[data-id="' + r.data.message.id + '"]')) log.append(chatRow(r.data.message));
+      chatLast = Math.max(chatLast, r.data.message.id); store.set(K("chatSeen"), chatLast);
+      log.scrollTop = log.scrollHeight;
+      $("#chatSub").textContent = "Everyone who is logged in shares this room. Be kind.";
+    } else toast(r.data.message || "Couldn't send that.");
+  } catch { toast("Couldn't reach the game server."); }
+  $("#chatSend").disabled = false; input.focus();
+});
+$("#chatLog").addEventListener("click", async e => {
+  const b = e.target.closest(".cdel"); if (!b || !isAdmin()) return;
+  const r = await api("/api/admin/chat/delete", {id:+b.dataset.id});
+  if (r.ok) b.closest(".cmsg").remove(); else toast(r.data.message || "Couldn't delete that message.");
+});
+$("#chatClear").addEventListener("click", async () => {
+  if (!isAdmin() || !(await askConfirm("Delete every message in the chat?", "Clear chat"))) return;
+  const r = await api("/api/admin/chat/clear", {});
+  if (r.ok) { $("#chatLog").replaceChildren(); $("#chatSub").textContent = "No messages yet. Say hi!"; } else toast(r.data.message || "Couldn't clear the chat.");
+});
+/* a dot on the Chat tab when there are messages you haven't seen (checked every 30 seconds while the chat is closed) */
+async function chatPeek(){
+  const btn = $("#chatBtn"); btn.hidden = !cloudOn();
+  if (!chatOk() || inChat()) return;
+  try {
+    const seen = store.get(K("chatSeen"), 0) || 0, who = user, r = await api("/api/chat" + (seen ? "?after=" + seen : ""));
+    if (!r.ok || who !== user) return;
+    const mine = r.data.messages.filter(m => m.name.toLowerCase() !== who);
+    if (!seen) { if (r.data.ids.length) store.set(K("chatSeen"), Math.max(...r.data.ids)); $("#chatDot").hidden = true; }   /* first look: nothing counts as new */
+    else $("#chatDot").hidden = !mine.length;
+  } catch {}
+}
+setInterval(chatPeek, 30000);
+
+/* ---------- inventory: every card from your daily packs, saved per account in this browser ---------- */
+function recordInv(){
+  if (mode !== "daily" || st.pack < PACKS || !run.length) return;
+  const inv = store.get(K("inv"), null) || {packs:[], cards:[]}, id = runDay + ":" + seed;
+  if (inv.packs.includes(id)) return;   /* each finished pack is added once, however often the screen is drawn */
+  inv.packs.push(id);
+  run.flat().forEach(c => inv.cards.push({id:c.id, t:c.t, s:c.shiny ? 1 : 0, mv:c.mv || null, day:runDay}));
+  store.set(K("inv"), inv);
+}
+const INV_STEP = 30;
+let invShown = INV_STEP;
+function invGroups(){
+  const inv = store.get(K("inv"), null) || {packs:[], cards:[]}, m = new Map();
+  inv.cards.forEach((x, k) => {
+    const key = x.id + ":" + x.t + ":" + x.s;
+    let g = m.get(key);
+    if (!g) { g = {id:x.id, t:x.t, shiny:!!x.s, mv:x.mv, n:0, last:0}; m.set(key, g); }
+    g.n++; g.last = k; if (!g.mv && x.mv) g.mv = x.mv;
+  });
+  const groups = [...m.values()];
+  groups.forEach(g => { g.pts = scoreCard(g).total; });
+  return {groups, inv};
+}
+function renderInventory(reset){
+  if (reset) invShown = INV_STEP;
+  const {groups, inv} = invGroups(), q = $("#invSearch").value.trim().toLowerCase(), rar = $("#invRar").value, sort = $("#invSort").value, shinyOnly = $("#invShiny").checked;
+  const uniq = new Set(inv.cards.map(x => x.id)).size, shinies = inv.cards.filter(x => x.s).length;
+  $("#invSub").textContent = inv.cards.length
+    ? inv.cards.length + " cards from " + inv.packs.length + (inv.packs.length === 1 ? " pack" : " packs") + " · " + uniq + " of " + MAX_ID + " Pokémon found · " + shinies + (shinies === 1 ? " shiny" : " shinies") + ". Only daily packs are added. Click a card for its score breakdown."
+    : "Nothing here yet. Cards from your daily pack are added once you've flipped them all. Practice packs don't count.";
+  let list = groups.filter(g => (!q || nameOf(g.id).toLowerCase().includes(q)) && (rar === "" || g.t === +rar) && (!shinyOnly || g.shiny));
+  const by = {
+    new:(a, b) => b.last - a.last, rar:(a, b) => b.t - a.t || b.pts - a.pts, pts:(a, b) => b.pts - a.pts,
+    dex:(a, b) => a.id - b.id || b.t - a.t, name:(a, b) => nameOf(a.id).localeCompare(nameOf(b.id)) || b.t - a.t,
+  };
+  list.sort(by[sort] || by.new);
+  const shown = list.slice(0, invShown);
+  $("#invGrid").replaceChildren(...shown.map((g, i) => {
+    const cell = document.createElement("div"); cell.className = "invcell";
+    cell.append(cardEl({id:g.id, t:g.t, shiny:g.shiny, mv:g.mv, pts:g.pts}, i, true));
+    if (g.n > 1) { const b = document.createElement("span"); b.className = "qty"; b.textContent = "×" + g.n; cell.append(b); }
+    return cell;
+  }));
+  $("#invEmpty").hidden = shown.length > 0 || !inv.cards.length;
+  $("#invEmpty").textContent = "No cards match those filters.";
+  $("#invMore").hidden = list.length <= shown.length;
+  $("#invMore").textContent = "Show more (" + (list.length - shown.length) + " left)";
+  fitNames($("#invGrid"));
+}
+function openInventory(){
+  $("#invRar").innerHTML = '<option value="">All rarities</option>' + RAR.map((r, k) => '<option value="' + k + '">' + r.k + "</option>").join("");
+  $("#invSearch").value = ""; $("#invSort").value = "new"; $("#invShiny").checked = false;
+  renderInventory(true);
+  showPage("invPg");
+  fitNames($("#invGrid"));
+}
+$("#invBtn").addEventListener("click", openInventory);
+["invSearch", "invRar", "invSort", "invShiny"].forEach(id => $("#" + id).addEventListener(id === "invSearch" ? "input" : "change", () => renderInventory(true)));
+$("#invMore").addEventListener("click", () => { invShown += INV_STEP; renderInventory(false); });
 function showStats(){
   const s = getStats(), rows = [
     ["Days played", s.played], ["Best pack", fmt(s.best)], ["Last pack", s.played ? fmt(s.last) : "—"], ["Average pack", s.played && s.sum ? fmt(s.sum / s.played) : "—"],
     ["Packs opened", s.packs], ["Shinies", s.shinies],
     ["Best pull", s.bestPull ? nameOf(s.bestPull.id) + " · " + fmt(s.bestPull.pts) : "—"],
   ];
-  $("#statsDlg h2").textContent = user ? ((accounts()[user] || {}).display || user) + "'s stats" : "Guest stats";
+  $("#statsPg h2").textContent = user ? ((accounts()[user] || {}).display || user) + "'s stats" : "Guest stats";
   $("#statsBody").innerHTML = rows.map(r => "<div><dt>" + r[0] + "</dt><dd>" + r[1] + "</dd></div>").join("");
-  $("#statsDlg").showModal();
+  showPage("statsPg");
 }
 
 /* ---------- accounts (local to this browser) ---------- */
@@ -1238,9 +1488,12 @@ function setUser(u){
   syncAdminUi();
   /* switching accounts is a full reset: close anything open, drop the old run, land on the new account's own run (or a fresh random pack) */
   document.querySelectorAll("dialog[open]").forEach(d => d.close());
+  const was = curPage; leavePage();
   $("#loading").hidden = true;
   window.scrollTo(0, 0);
   startRun(false);
+  $("#chatDot").hidden = true; chatPeek();
+  if (was) ({chatView:openChat, boardPg:openBoard, invPg:openInventory, statsPg:showStats, adminPg:openAdmin})[was]();   /* logging in or out keeps you on the page you were on */
 }
 async function submitAuth(e){
   e.preventDefault();
@@ -1314,7 +1567,7 @@ function pageRows(list){
   return list.slice(admPage * ADM_PER, (admPage + 1) * ADM_PER);
 }
 async function renderAdminCloud(){
-  $("#admSub").textContent = "Admin for the shared server. Changes here apply to every player.";
+  $("#admSub").textContent = "Admin for the shared server. Changes here apply to every player."; $("#admLbl").textContent = "All players";
   $("#admTbl").innerHTML = '<tr><td class="note">Loading players…</td></tr>';
   let r; try { r = await api("/api/admin/users?day=" + encodeURIComponent(todayKey())); } catch { r = null; }
   if (!r || !r.ok) { $("#admTbl").innerHTML = '<tr><td class="note">' + (r && r.status === 403 ? "This account isn't an admin on the server." : "Couldn't load the players. Check your connection.") + "</td></tr>"; return; }
@@ -1379,7 +1632,7 @@ function openAdmin(){
   if (!isAdmin()) return;
   $("#admRar").innerHTML = RAR.map((r, k) => '<option value="' + k + '">' + r.k + "</option>").join("");
   $("#admExport").hidden = $("#admWipe").hidden = cloudOn();   /* those two act on this browser's own storage */
-  admPage = 0; renderAdmin(); $("#adminDlg").showModal();
+  admPage = 0; renderAdmin(); showPage("adminPg");
 }
 $("#admPrev").addEventListener("click", () => { admPage--; renderAdmin(); });
 $("#admNext").addEventListener("click", () => { admPage++; renderAdmin(); });
@@ -1443,7 +1696,7 @@ $("#admExport").addEventListener("click", async () => {
 $("#admWipe").addEventListener("click", async () => {
   if (!isAdmin() || !(await askConfirm("Wipe ALL accounts, progress and stats in this browser? This can't be undone.", "Wipe everything"))) return;
   Object.keys(localStorage).filter(k => k.startsWith("packdle:") && k !== "packdle:bulk2").forEach(k => localStorage.removeItem(k));
-  $("#adminDlg").close(); setUser(null); $("#authBtn").textContent = "Log in"; toast("All data wiped.");
+  leavePage(); setUser(null); $("#authBtn").textContent = "Log in"; toast("All data wiped.");
 });
 
 /* ---------- check cards: every card from the run ---------- */
@@ -1461,7 +1714,7 @@ $("#cdBest").addEventListener("click", () => openCards(true));
 
 async function openBoard(){
   if (cloudOn()) {
-    $("#boardSub").textContent = "Loading the shared leaderboard…"; $("#boardTbl").innerHTML = ""; $("#boardDlg").showModal();
+    $("#boardSub").textContent = "Loading the shared leaderboard…"; $("#boardTbl").innerHTML = ""; showPage("boardPg");
     try {
       const r = await api("/api/leaderboard?day=" + encodeURIComponent(todayKey()));
       if (!r.ok) throw new Error("board");
@@ -1484,7 +1737,7 @@ async function openBoard(){
     ? "<tr><th>#</th><th>Player</th><th>Today</th><th>Best pack</th><th>Days</th></tr>" + rows.map((r, i) =>
       '<tr><td class="n">' + (i+1) + '</td><td class="' + (r.u === user ? "me" : "") + '">' + r.name.replace(/[<>&]/g, "") + '</td><td class="n">' + (r.today === null ? "—" : fmt(r.today)) + '</td><td class="n">' + (r.best ? fmt(r.best) : "—") + '</td><td class="n">' + r.runs + '</td></tr>').join("")
     : "";
-  $("#boardDlg").showModal();
+  showPage("boardPg");
 }
 
 /* ---------- results ---------- */
@@ -1579,7 +1832,7 @@ document.addEventListener("pointerout", e => {
 });
 $("#flipAll").addEventListener("click", flipAll);
 $("#nextBtn").addEventListener("click", next);
-$("#tabDaily").addEventListener("click", () => { if (mode !== "daily") startRun(false); });
+$("#tabDaily").addEventListener("click", () => { leavePage(); if (mode !== "daily") startRun(false); });
 /* countdown to the next daily pack, visible on every tab once today's pack is used up */
 const hms = ms => { const s = Math.max(0, Math.floor(ms / 1000)), p = n => String(n).padStart(2, "0"); return p(Math.floor(s / 3600)) + ":" + p(Math.floor(s % 3600 / 60)) + ":" + p(s % 60); };
 function updateNextChip(){
@@ -1613,9 +1866,9 @@ async function checkGrant(){
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) checkGrant(); });
 setInterval(checkGrant, 60000);
-$("#nextChip").addEventListener("click", () => { window.scrollTo(0, 0); startRun(false); });
+$("#nextChip").addEventListener("click", () => { leavePage(); window.scrollTo(0, 0); startRun(false); });
 updateNextChip(); setInterval(updateNextChip, 1000);
-$("#tabFree").addEventListener("click", () => { if (mode !== "free") startFree(); });
+$("#tabFree").addEventListener("click", () => { leavePage(); if (mode !== "free") startFree(); });
 $("#statsBtn").addEventListener("click", showStats);
 $("#boardBtn").addEventListener("click", openBoard);
 $("#muteBtn").addEventListener("click", () => { sfx.setMuted(!sfx.muted); syncMuteUi(); sfx.badge(); });
@@ -1642,6 +1895,7 @@ if (saved && accounts()[saved] && (!cloudOn() || store.get("packdle:token", null
   postScore();   /* retry a score that couldn't be posted last time */
   refreshAdmin();
   checkGrant();
+  chatPeek();
   if (!dataOk) toast("Couldn't load Pokémon data. Packs need a connection, so check it and reload.");
   $("#loadRetry").addEventListener("click", async () => {
     $("#loadRetry").hidden = true; $("#loading span").textContent = "Loading Pokémon data…";

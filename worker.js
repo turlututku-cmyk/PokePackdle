@@ -154,6 +154,7 @@ async function adminDelete(req, env){
   if (target.id === admin.id || isAdminKey(env, target.key)) return fail(400, "protected", "Admin accounts can't be deleted here.");
   await env.DB.prepare("DELETE FROM scores WHERE user_id = ?").bind(target.id).run();
   try { await ensureGrants(env); await env.DB.prepare("DELETE FROM packgrants WHERE user_id = ?").bind(target.id).run(); } catch {}
+  try { await ensureChat(env); await env.DB.prepare("DELETE FROM chat WHERE user_id = ?").bind(target.id).run(); } catch {}
   await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(target.id).run();
   return json({ok:true});
 }
@@ -164,6 +165,68 @@ async function adminClearScore(req, env){
   if (!target) return fail(404, "nouser", "No player with that name.");
   const day = isDay(b.day) ? b.day : utcDay();
   const r = await env.DB.prepare("DELETE FROM scores WHERE user_id = ? AND day = ?").bind(target.id, day).run();
+  return json({ok:true, removed:r.meta.changes});
+}
+
+/* ---------- chat ---------- */
+/* One shared room for everyone who is logged in. The table is created on first use. Messages are plain text (the game
+   shows them as text, never as HTML), capped at 200 characters, rate limited, and only the newest 1,000 are kept. */
+let chatReady = false;
+async function ensureChat(env){
+  if (chatReady) return;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS chat (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, text TEXT NOT NULL, ts INTEGER NOT NULL)").run();
+  chatReady = true;
+}
+
+/* the newest 50 messages. "messages" holds the ones after ?after=ID, "ids" lists everything still there, so the game can drop deleted ones */
+async function chatList(req, env){
+  const uid = await readToken(env, req);
+  if (!uid) return fail(401, "auth", "Log in again.");
+  await ensureChat(env);
+  const after = parseInt(new URL(req.url).searchParams.get("after"), 10);
+  const res = await env.DB.prepare(
+    "SELECT c.id, c.text, c.ts, u.display AS name, u.key AS ukey FROM chat c JOIN users u ON u.id = c.user_id ORDER BY c.id DESC LIMIT 50"
+  ).all();
+  const rows = res.results.reverse();
+  return json({
+    messages:rows.filter(r => !(after > 0) || r.id > after).map(r => ({id:r.id, name:r.name, text:r.text, ts:r.ts, admin:isAdminKey(env, r.ukey)})),
+    ids:rows.map(r => r.id),
+  });
+}
+
+async function chatSend(req, env){
+  const uid = await readToken(env, req);
+  if (!uid) return fail(401, "auth", "Log in again.");
+  const {text} = await readBody(req);
+  const t = typeof text === "string" ? text.replace(/[ -]/g, " ").replace(/\s+/g, " ").trim() : "";
+  if (!t) return fail(400, "empty", "Type a message first.");
+  if (t.length > 200) return fail(400, "long", "Messages can be up to 200 characters.");
+  const u = await env.DB.prepare("SELECT id, key, display FROM users WHERE id = ?").bind(uid).first();
+  if (!u) return fail(401, "auth", "Log in again.");
+  await ensureChat(env);
+  const now = Date.now();
+  const recent = await env.DB.prepare("SELECT COUNT(*) AS n, MAX(ts) AS last FROM chat WHERE user_id = ? AND ts > ?").bind(uid, now - 60000).first();
+  if (recent && recent.last && now - recent.last < 1500) return fail(429, "slow", "Slow down a little.");
+  if (recent && recent.n >= 20) return fail(429, "slow", "That's a lot of messages. Wait a minute and try again.");
+  const r = await env.DB.prepare("INSERT INTO chat (user_id, text, ts) VALUES (?, ?, ?)").bind(uid, t, now).run();
+  const id = r.meta.last_row_id;
+  if (id % 50 === 0) await env.DB.prepare("DELETE FROM chat WHERE id <= ?").bind(id - 1000).run();
+  return json({ok:true, message:{id, name:u.display, text:t, ts:now, admin:isAdminKey(env, u.key)}});
+}
+
+async function adminChatDelete(req, env){
+  if (!await requireAdmin(req, env)) return fail(403, "forbidden", "Admins only.");
+  const {id} = await readBody(req);
+  if (!Number.isInteger(id)) return fail(400, "badid", "That message isn't valid.");
+  await ensureChat(env);
+  await env.DB.prepare("DELETE FROM chat WHERE id = ?").bind(id).run();
+  return json({ok:true});
+}
+
+async function adminChatClear(req, env){
+  if (!await requireAdmin(req, env)) return fail(403, "forbidden", "Admins only.");
+  await ensureChat(env);
+  const r = await env.DB.prepare("DELETE FROM chat").run();
   return json({ok:true, removed:r.meta.changes});
 }
 
@@ -197,6 +260,10 @@ export default {
       if (req.method === "POST" && path === "/api/admin/delete") return await adminDelete(req, env);
       if (req.method === "POST" && path === "/api/admin/clearscore") return await adminClearScore(req, env);
       if (req.method === "POST" && path === "/api/admin/newpack") return await adminNewPack(req, env);
+      if (req.method === "GET" && path === "/api/chat") return await chatList(req, env);
+      if (req.method === "POST" && path === "/api/chat") return await chatSend(req, env);
+      if (req.method === "POST" && path === "/api/admin/chat/delete") return await adminChatDelete(req, env);
+      if (req.method === "POST" && path === "/api/admin/chat/clear") return await adminChatClear(req, env);
       if (path === "" || path === "/api") return json({ok:true, name:"pokepackdle-api"});
       return fail(404, "notfound", "Not found.");
     } catch (e) {

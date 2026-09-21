@@ -25,3 +25,11 @@ CREATE TABLE IF NOT EXISTS packgrants (
   day     TEXT NOT NULL,             -- the day whose score was cleared
   ts      INTEGER NOT NULL
 );
+
+-- the shared chat room (the server also creates this table by itself on first use)
+CREATE TABLE IF NOT EXISTS chat (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  text    TEXT NOT NULL,
+  ts      INTEGER NOT NULL
+);
