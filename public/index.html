@@ -422,7 +422,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 
   <div class="log" id="log" aria-label="Points per pack"></div>
 
-  <details>
+  <details id="oddsSec">
     <summary>Pull rates &amp; points</summary>
     <div class="scroll"><table class="odds" id="odds"></table></div>
   </details>
@@ -589,6 +589,10 @@ const GEN_END = [151,251,386,493,649,721,809,905,1025];
 const genOf = id => GEN_END.findIndex(e => id <= e);
 const count = (cs, fn) => cs.reduce((a, c) => a + (fn(c) ? 1 : 0), 0);
 const maxSame = arr => { const m = {}; let best = 0; for (const x of arr) best = Math.max(best, m[x] = (m[x] || 0) + 1); return best; };
+const packHp = cs => cs.reduce((a, c) => a + cardStats(c.id, c.t, dataFor(c.id)).hp, 0);
+const typeOf = c => dataFor(c.id).ty;
+const STARTERS = new Set([1,2,3,4,5,6,7,8,9, 152,153,154,155,156,157,158,159,160, 252,253,254,255,256,257,258,259,260, 387,388,389,390,391,392,393,394,395, 495,496,497,498,499,500,501,502,503, 650,651,652,653,654,655,656,657,658, 722,723,724,725,726,727,728,729,730, 810,811,812,813,814,815,816,817,818, 906,907,908,909,910,911,912,913,914]);
+const EEVEES = new Set([133,134,135,136,196,197,470,471,700]);
 const BADGES = [
   {k:"bulk",    i:"📦", n:"Bulk Box",     pts:15,  d:"Every card is Common or Uncommon",                    f:cs => cs.every(c => c.t <= 1)},
   {k:"odd",     i:"🔶", n:"Odd Squad",    pts:15,  d:"7 or more cards have an odd Pokédex number",          f:cs => count(cs, c => c.id % 2 === 1) >= 7},
@@ -596,7 +600,7 @@ const BADGES = [
   {k:"void",    i:"🚫", n:"Void",         pts:20,  d:"No Pokédex number contains a 0",                      f:cs => cs.every(c => !String(c.id).includes("0"))},
   {k:"kanto",   i:"🔴", n:"Kanto Fans",   pts:20,  d:"3 or more cards are from Generation 1",               f:cs => count(cs, c => c.id <= 151) >= 3},
   {k:"sevens",  i:"🍀", n:"Lucky Sevens", pts:35,  d:"3 or more Pokédex numbers end in 7",                  f:cs => count(cs, c => c.id % 10 === 7) >= 3},
-  {k:"tank",    i:"🛡️", n:"Tank",         pts:10,  d:"Your pack's total HP is 1,000 or more",               f:cs => cs.reduce((a, c) => a + cardStats(c.id, c.t, dataFor(c.id)).hp, 0) >= 1000},
+  {k:"tank",    i:"🛡️", n:"Tank",         pts:10,  d:"Your pack's total HP is 1,200 or more",               f:cs => packHp(cs) >= 1200},
   {k:"rare3",   i:"⭐", n:"Rare Trio",    pts:25,  d:"3 or more cards are Rare or better",                  f:cs => count(cs, c => c.t >= 2) >= 3},
   {k:"spectrum",i:"🃏", n:"Full Set",     pts:30,  d:"You pulled a Common, Uncommon, Rare and Holo Rare",   f:cs => [0,1,2,3].every(t => cs.some(c => c.t === t))},
   {k:"twins",   i:"👯", n:"Twins",        pts:40,  d:"The same Pokémon shows up twice",                     f:cs => maxSame(cs.map(c => c.id)) >= 2},
@@ -608,6 +612,18 @@ const BADGES = [
   {k:"shiny",   i:"✨", n:"Shiny Sighting",pts:75, d:"You pulled a shiny",                                  f:cs => cs.some(c => c.shiny)},
   {k:"rainbow", i:"🌈", n:"Rainbow Pack", pts:100, d:"5 or more different rarities in one pack",            f:cs => new Set(cs.map(c => c.t)).size >= 5},
   {k:"legend2", i:"👑", n:"Legend Pair",  pts:200, d:"2 or more cards are Ultra Rare or better",            f:cs => count(cs, c => c.t >= 4) >= 2},
+  {k:"mono",    i:"🧪", n:"Mono Type",    pts:40,  d:"5 or more cards share the same type",                 f:cs => maxSame(cs.map(typeOf)) >= 5},
+  {k:"party",   i:"🎨", n:"Type Party",   pts:40,  d:"8 or more different types in one pack",               f:cs => new Set(cs.map(typeOf)).size >= 8},
+  {k:"chain",   i:"🌿", n:"Final Forms",  pts:50,  d:"4 or more Stage 2 cards in one pack",                 f:cs => count(cs, c => dataFor(c.id).st === "STAGE 2") >= 4},
+  {k:"next",    i:"🏘️", n:"Neighbors",    pts:50,  d:"Two cards with back-to-back Pokédex numbers",         f:cs => { const s = new Set(cs.map(c => c.id)); return cs.some(c => s.has(c.id + 1)); }},
+  {k:"family",  i:"🧬", n:"Family Reunion",pts:60, d:"A Pokémon and the one it evolves from, together",     f:cs => cs.some(c => { const f = dataFor(c.id).from; return f && cs.some(o => o.id === f); })},
+  {k:"starter", i:"🌱", n:"Starter Squad",pts:60,  d:"3 or more starter Pokémon or their evolutions",       f:cs => count(cs, c => STARTERS.has(c.id)) >= 3},
+  {k:"boss",    i:"🏔️", n:"Big Boss",     pts:60,  d:"One card has 300 HP or more",                         f:cs => cs.some(c => cardStats(c.id, c.t, dataFor(c.id)).hp >= 300)},
+  {k:"eevee",   i:"🦊", n:"Eeveelutions", pts:100, d:"2 or more Eevee or Eeveelution cards",                f:cs => count(cs, c => EEVEES.has(c.id)) >= 2},
+  {k:"secret",  i:"🔮", n:"Secret Sighting",pts:100, d:"You pulled a Secret Rare",                          f:cs => cs.some(c => c.t === 5)},
+  {k:"pure",    i:"🧺", n:"Pure Bulk",    pts:100, d:"All 10 cards are Common",                             f:cs => cs.every(c => c.t === 0)},
+  {k:"twoshiny",i:"🌟", n:"Double Shiny", pts:150, d:"2 or more shiny cards in one pack",                   f:cs => count(cs, c => c.shiny) >= 2},
+  {k:"crown",   i:"💠", n:"Crown Jewel",  pts:300, d:"You pulled a Crown Rare",                             f:cs => cs.some(c => c.t === 6)},
   {k:"zard",    i:"🔥", n:"Crown Charizard",pts:1000, d:"You pulled Charizard as a Crown Rare",           f:cs => cs.some(c => c.id === 6 && c.t === 6)},
 ];
 const bTier = pts => pts <= 20 ? 0 : pts <= 40 ? 1 : pts <= 75 ? 2 : pts <= 200 ? 4 : 6;
@@ -866,6 +882,7 @@ function fitNames(root){
 }
 function show(v){
   for (const id of ["viewPack","viewCards","viewResults"]) $("#" + id).hidden = id !== v;
+  $("#oddsSec").hidden = v === "viewResults";   /* the results screen has its own copy of the pull rates */
   fitNames($("#" + v));   /* names can only be measured once their view is visible */
 }
 function render(){
@@ -1497,7 +1514,8 @@ function renderResults(){
     '</table></div></div>' +
     '<pre class="grid-share">' + text.split("\n").slice(2, -1).join("\n") + '</pre>' +
     '<div class="controls" style="justify-content:flex-start;margin-top:0"><button class="btn" id="shareBtn">Copy result</button><button class="btn ghost" id="checkBtn">Check cards</button>' +
-    '</div><p class="note" id="nextPack" style="margin-top:14px"></p>';
+    '</div><p class="note" id="nextPack" style="margin-top:14px"></p>' +
+    '<details open style="max-width:none"><summary>Pull rates &amp; points</summary><div class="scroll"><table class="odds">' + $("#odds").innerHTML + '</table></div></details>';
   $("#bestCard").append(cardEl(b, 0, true));
   $("#shareBtn").onclick = async () => {
     try { await navigator.clipboard.writeText(text); toast("Copied. Paste it anywhere."); }
