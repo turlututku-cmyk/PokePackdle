@@ -73,11 +73,27 @@ async function login(req, env){
   return json({token:await makeToken(env, row.id), user:{id:row.id, display:row.display, admin:isAdminKey(env, row.key)}});
 }
 
+/* "new pack" grants: when an admin gives a player a new pack, a row lands here. The game asks for the newest one and, if it
+   hasn't seen it yet, deals the player a fresh pack. The table is created on first use, so no manual database step is needed. */
+let grantsReady = false;
+async function ensureGrants(env){
+  if (grantsReady) return;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS packgrants (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, day TEXT NOT NULL, ts INTEGER NOT NULL)").run();
+  grantsReady = true;
+}
+
 async function me(req, env){
   const uid = await readToken(env, req);
   if (!uid) return fail(401, "auth", "Log in again.");
   const row = await env.DB.prepare("SELECT id, key, display FROM users WHERE id = ?").bind(uid).first();
-  return row ? json({user:{id:row.id, display:row.display, admin:isAdminKey(env, row.key)}}) : fail(401, "auth", "Log in again.");
+  if (!row) return fail(401, "auth", "Log in again.");
+  let grant = {id:0, day:null};
+  try {
+    await ensureGrants(env);
+    const g = await env.DB.prepare("SELECT id, day FROM packgrants WHERE user_id = ? ORDER BY id DESC LIMIT 1").bind(uid).first();
+    if (g) grant = {id:g.id, day:g.day};
+  } catch {}   /* never let this stop a login check */
+  return json({user:{id:row.id, display:row.display, admin:isAdminKey(env, row.key)}, grant});
 }
 
 /* one score per account per day. The first score for a day is the one that counts. */
@@ -137,6 +153,7 @@ async function adminDelete(req, env){
   if (!target) return fail(404, "nouser", "No player with that name.");
   if (target.id === admin.id || isAdminKey(env, target.key)) return fail(400, "protected", "Admin accounts can't be deleted here.");
   await env.DB.prepare("DELETE FROM scores WHERE user_id = ?").bind(target.id).run();
+  try { await ensureGrants(env); await env.DB.prepare("DELETE FROM packgrants WHERE user_id = ?").bind(target.id).run(); } catch {}
   await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(target.id).run();
   return json({ok:true});
 }
@@ -148,6 +165,21 @@ async function adminClearScore(req, env){
   const day = isDay(b.day) ? b.day : utcDay();
   const r = await env.DB.prepare("DELETE FROM scores WHERE user_id = ? AND day = ?").bind(target.id, day).run();
   return json({ok:true, removed:r.meta.changes});
+}
+
+/* gives a player a new pack: their latest score (from today or yesterday) is removed from the leaderboard and a grant is
+   recorded, so the game deals them a fresh pack that counts. */
+async function adminNewPack(req, env){
+  if (!await requireAdmin(req, env)) return fail(403, "forbidden", "Admins only.");
+  const {name} = await readBody(req), target = await findUser(env, name);
+  if (!target) return fail(404, "nouser", "No player with that name.");
+  await ensureGrants(env);
+  const today = utcDay();
+  const last = await env.DB.prepare("SELECT day FROM scores WHERE user_id = ? ORDER BY day DESC LIMIT 1").bind(target.id).first();
+  const day = last && Math.abs(Date.parse(last.day) - Date.parse(today)) <= 864e5 ? last.day : today;
+  const r = await env.DB.prepare("DELETE FROM scores WHERE user_id = ? AND day = ?").bind(target.id, day).run();
+  await env.DB.prepare("INSERT INTO packgrants (user_id, day, ts) VALUES (?, ?, ?)").bind(target.id, day, Date.now()).run();
+  return json({ok:true, removed:r.meta.changes, day});
 }
 
 export default {
@@ -164,6 +196,7 @@ export default {
       if (req.method === "POST" && path === "/api/admin/password") return await adminPassword(req, env);
       if (req.method === "POST" && path === "/api/admin/delete") return await adminDelete(req, env);
       if (req.method === "POST" && path === "/api/admin/clearscore") return await adminClearScore(req, env);
+      if (req.method === "POST" && path === "/api/admin/newpack") return await adminNewPack(req, env);
       if (path === "" || path === "/api") return json({ok:true, name:"pokepackdle-api"});
       return fail(404, "notfound", "Not found.");
     } catch (e) {

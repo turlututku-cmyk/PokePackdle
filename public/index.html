@@ -340,6 +340,9 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 .btn.sm.ghost{box-shadow:none}
 .btn.danger{color:#ff8f8f; border-color:#ff8f8f55}
 .btn.danger-fill{background:#ff6b6b; color:#2b0606; box-shadow:0 4px 0 #b53a3a}
+.pager{display:flex; align-items:center; justify-content:center; gap:14px; margin-top:12px; font:600 12px var(--mono); color:var(--muted)}
+.pager[hidden]{display:none}
+.pager button:disabled{opacity:.4; cursor:default}
 .acts{display:flex; gap:6px; flex-wrap:wrap}
 .acts button{border:1px solid var(--line); background:transparent; border-radius:6px; padding:5px 9px; font:600 12px var(--body); cursor:pointer; color:var(--ink)}
 .acts button.danger{color:#ff8f8f}
@@ -462,6 +465,11 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 
   <div class="lbl" style="margin-top:18px">Accounts on this browser</div>
   <div class="scroll"><table class="odds" id="admTbl"></table></div>
+  <div class="pager" id="admPager" hidden>
+    <button type="button" class="btn sm ghost" id="admPrev">Prev</button>
+    <span id="admPageLbl"></span>
+    <button type="button" class="btn sm ghost" id="admNext">Next</button>
+  </div>
 
   <div class="lbl" style="margin-top:22px">Card previewer</div>
   <div class="adm-row">
@@ -1243,6 +1251,7 @@ async function submitAuth(e){
     $("#authDlg").close();
     setUser(u);
     flushPending();
+    checkGrant();
     return;
   }
   if (authMode === "up") {
@@ -1276,17 +1285,29 @@ async function refreshAdmin(){
 }
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
 function syncAdminUi(){ $("#adminBtn").hidden = !isAdmin(); }
+/* the player list shows 10 per page */
+const ADM_PER = 10;
+let admPage = 0;
+function pageRows(list){
+  const pages = Math.max(1, Math.ceil(list.length / ADM_PER));
+  admPage = Math.min(Math.max(0, admPage), pages - 1);
+  $("#admPager").hidden = pages < 2;
+  $("#admPageLbl").textContent = "Page " + (admPage + 1) + " of " + pages + " · " + list.length + " players";
+  $("#admPrev").disabled = admPage === 0; $("#admNext").disabled = admPage >= pages - 1;
+  return list.slice(admPage * ADM_PER, (admPage + 1) * ADM_PER);
+}
 async function renderAdminCloud(){
   $("#admSub").textContent = "Admin for the shared server. Changes here apply to every player.";
   $("#admTbl").innerHTML = '<tr><td class="note">Loading players…</td></tr>';
   let r; try { r = await api("/api/admin/users?day=" + encodeURIComponent(todayKey())); } catch { r = null; }
   if (!r || !r.ok) { $("#admTbl").innerHTML = '<tr><td class="note">' + (r && r.status === 403 ? "This account isn't an admin on the server." : "Couldn't load the players. Check your connection.") + "</td></tr>"; return; }
-  const rows = (r.data.users || []).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));   /* A to Z */
+  const everyone = (r.data.users || []).slice().sort((a, b) => a.name.localeCompare(b.name, undefined, {sensitivity:"base"}));   /* A to Z */
+  const rows = pageRows(everyone);
   $("#admTbl").innerHTML = rows.length
     ? "<tr><th>Player</th><th>Created</th><th>Today</th><th>Best</th><th>Days</th><th>Actions</th></tr>" + rows.map(u =>
         "<tr><td>" + esc(u.name) + (u.admin ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(u.created || 0).toLocaleDateString() +
         '</td><td class="n">' + (u.today == null ? "—" : fmt(u.today)) + '</td><td class="n">' + (u.best == null ? "—" : fmt(u.best)) + '</td><td class="n">' + u.days + '</td><td><span class="acts">' +
-        '<button data-act="pw" data-u="' + esc(u.name) + '">New password</button><button data-act="clear" data-u="' + esc(u.name) + '">Clear today</button>' +
+        '<button data-act="newpack" data-u="' + esc(u.name) + '">New pack</button><button data-act="pw" data-u="' + esc(u.name) + '">New password</button><button data-act="clear" data-u="' + esc(u.name) + '">Clear today</button>' +
         (u.admin ? "" : '<button class="danger" data-act="del" data-u="' + esc(u.name) + '">Delete</button>') + "</span></td></tr>").join("")
     : "";
 }
@@ -1298,6 +1319,10 @@ async function adminActionCloud(b){
       if (pw === null) return;
       const r = await api("/api/admin/password", {name, password:pw});
       toast(r.ok ? "Password updated for " + name + "." : (r.data.message || "Couldn't change the password."));
+    } else if (act === "newpack") {
+      if (!(await askConfirm("Give " + name + " a new pack? Their latest score is removed from the leaderboard and they can open another pack that counts.", "Give new pack"))) return;
+      const r = await api("/api/admin/newpack", {name});
+      toast(r.ok ? "Gave " + name + " a new pack. They get it next time the game checks in." : (r.data.message || "Couldn't give a new pack."));
     } else if (act === "clear") {
       if (!(await askConfirm("Clear " + name + "'s score for today? It disappears from the leaderboard.", "Clear score"))) return;
       const r = await api("/api/admin/clearscore", {name, day:todayKey()});
@@ -1314,7 +1339,8 @@ function renderAdmin(){
   if (cloudOn()) return renderAdminCloud();
   const all = accounts();
   $("#admSub").textContent = "Signed in as " + accounts()[user].display + ". Changes apply to accounts stored in this browser.";
-  const users = Object.keys(all).sort((a, b) => a.localeCompare(b, undefined, {sensitivity:"base"}));   /* A to Z */
+  const everyone = Object.keys(all).sort((a, b) => a.localeCompare(b, undefined, {sensitivity:"base"}));   /* A to Z */
+  const users = pageRows(everyone);
   $("#admTbl").innerHTML = users.length
     ? "<tr><th>Player</th><th>Created</th><th>Current run</th><th>Best</th><th>Runs</th><th>Actions</th></tr>" + users.map(u => {
         const s = Object.assign({}, defStats, store.get("packdle:u:" + u + ":stats", {})), best = Math.max(s.best, s.bestDaily, s.bestFree);
@@ -1336,8 +1362,10 @@ function openAdmin(){
   if (!isAdmin()) return;
   $("#admRar").innerHTML = RAR.map((r, k) => '<option value="' + k + '">' + r.k + "</option>").join("");
   $("#admExport").hidden = $("#admWipe").hidden = cloudOn();   /* those two act on this browser's own storage */
-  renderAdmin(); $("#adminDlg").showModal();
+  admPage = 0; renderAdmin(); $("#adminDlg").showModal();
 }
+$("#admPrev").addEventListener("click", () => { admPage--; renderAdmin(); });
+$("#admNext").addEventListener("click", () => { admPage++; renderAdmin(); });
 /* in-page replacements for confirm() / prompt(), which some embedded browsers block */
 function askConfirm(message, okLabel){
   return new Promise(res => {
@@ -1459,7 +1487,7 @@ function renderResults(){
   const text = shareText(t, rank, top);
   v.innerHTML =
     '<div class="res-top"><div><div class="lbl">Final score</div><div class="res-score">' + fmt(t) + '</div></div>' +
-    '<div><div class="res-rank">' + rank + '</div><div class="res-pct">Better than ' + p.toFixed(p > 99 ? 1 : 0) + '% of runs · top ' + top + '</div></div></div>' +
+    '<div><div class="res-rank">' + rank + '</div><div class="res-pct">Top ' + top + '</div></div></div>' +
     '<div class="res-cols"><div id="bestCard"></div><div><table class="brk">' +
     RAR.map((r, k) => '<tr><td><span class="dot" style="--c:' + r.col + '"></span>' + r.k + '</td><td>' + counts[k] + (counts[k] === 1 ? ' card' : ' cards') + '</td><td>' + fmt(all.filter(c => c.t === k).reduce((a, c) => a + c.pts, 0)) + '</td></tr>').join("") +
     (shinies ? '<tr><td><span class="dot" style="--c:#ffd23f"></span>Shinies</td><td>' + shinies + ' × ' + SHINY_MULT + '</td><td>(in card scores)</td></tr>' : '') +
@@ -1545,6 +1573,28 @@ function updateNextChip(){
     chip.className = "nextchip"; chip.innerHTML = "Next pack <b>" + hms(new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n) + "</b>";
   } else { chip.className = "nextchip ready"; chip.textContent = "New pack ready"; }
 }
+/* an admin can give a player a new pack. The server keeps a "grant" for the player; when the game sees one it hasn't handled, it
+   deals a fresh pack, but only if the player already used up that day's pack (an unopened or unfinished pack still counts on its own). */
+let grantBusy = false;
+async function checkGrant(){
+  if (grantBusy || !cloudOn() || !user || !store.get("packdle:token", null)) return;
+  grantBusy = true;
+  try {
+    const who = user, r = await api("/api/me");
+    if (!r.ok || who !== user || !r.data.grant) return;
+    const g = r.data.grant, seen = store.get(K("grantSeen"), 0) || 0;
+    if (g.id <= seen) return;
+    store.set(K("grantSeen"), g.id);
+    const cur = store.get(K("run"), null), used = cur && cur.st && cur.st.pack >= PACKS && (cur.day === g.day || cur.day === todayKey());
+    if (!used) return;
+    localStorage.removeItem(K("run"));
+    if (mode === "daily") { window.scrollTo(0, 0); startRun(true); }
+    updateNextChip();
+    toast("An admin gave you a new pack!");
+  } catch {} finally { grantBusy = false; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkGrant(); });
+setInterval(checkGrant, 60000);
 $("#nextChip").addEventListener("click", () => { window.scrollTo(0, 0); startRun(false); });
 updateNextChip(); setInterval(updateNextChip, 1000);
 $("#tabFree").addEventListener("click", () => { if (mode !== "free") startFree(); });
@@ -1573,6 +1623,7 @@ if (saved && accounts()[saved] && (!cloudOn() || store.get("packdle:token", null
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitNames(document));   /* re-fit once the web fonts have loaded */
   postScore();   /* retry a score that couldn't be posted last time */
   refreshAdmin();
+  checkGrant();
   if (!dataOk) toast("Couldn't load Pokémon data. Packs need a connection, so check it and reload.");
   $("#loadRetry").addEventListener("click", async () => {
     $("#loadRetry").hidden = true; $("#loading span").textContent = "Loading Pokémon data…";

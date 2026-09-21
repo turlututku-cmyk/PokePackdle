@@ -17,3 +17,11 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 
 CREATE INDEX IF NOT EXISTS scores_by_day ON scores (day, score DESC);
+
+-- "new pack" grants an admin has given to players (the server also creates this table by itself on first use)
+CREATE TABLE IF NOT EXISTS packgrants (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  day     TEXT NOT NULL,             -- the day whose score was cleared
+  ts      INTEGER NOT NULL
+);
