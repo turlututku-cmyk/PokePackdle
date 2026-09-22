@@ -1401,7 +1401,7 @@ function leavePage(switching){
   if (!curPage) return;
   const id = curPage; curPage = null;
   if (id === "chatView") clearInterval(chatTimer);
-  if (id === "tradesPg") { clearInterval(roomTimer); roomId = null; $("#tradeRoom").hidden = true; $("#tradesList").hidden = false; }
+  if (id === "tradesPg") { clearInterval(roomTimer); clearInterval(tradesTimer); roomId = null; $("#tradeRoom").hidden = true; $("#tradesList").hidden = false; }
   $("#" + id).classList.remove("on"); $(PAGE_BTN[id]).removeAttribute("aria-selected");
   if (switching) return;
   document.body.classList.remove("pagemode");
@@ -1496,7 +1496,7 @@ $("#pfDecline").addEventListener("click", async () => {
 });
 
 /* ---------- trading: send a request, they accept, then either side places cards and marks ready ---------- */
-let tradesCache = null, roomId = null, roomTimer = 0, roomBusy = false, myOfferState = [], pickerRows = [], pickerOpen = false;
+let tradesCache = null, tradesTimer = 0, roomId = null, roomTimer = 0, roomBusy = false, myOfferState = [], pickerRows = [], pickerOpen = false;
 function tradeRowHtml(t, inner){
   return '<div class="trow" data-id="' + t.id + '"><div><div class="who">' + esc(t.with) + '</div><div class="sub">' + inner.sub + '</div></div><div class="controls" style="margin:0">' + inner.buttons + '</div></div>';
 }
@@ -1526,6 +1526,8 @@ function openTrades(){
   showPage("tradesPg");
   $("#tradeRoom").hidden = true; $("#tradesList").hidden = false;
   loadTrades();
+  /* keeps incoming requests and the other side's readiness up to date without needing to reopen the tab */
+  clearInterval(tradesTimer); tradesTimer = setInterval(() => { if (curPage === "tradesPg") loadTrades(); }, 5000);
 }
 $("#tradeBtn").addEventListener("click", openTrades);
 $("#tradeSearchForm").addEventListener("submit", async e => {
