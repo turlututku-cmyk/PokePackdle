@@ -18,12 +18,14 @@ CREATE TABLE IF NOT EXISTS scores (
 
 CREATE INDEX IF NOT EXISTS scores_by_day ON scores (day, score DESC);
 
--- "new pack" grants an admin has given to players (the server also creates this table by itself on first use)
+-- "new pack" and "god pack" grants an admin has given to players (the server also creates this table, and adds the
+-- kind column to an older one, by itself on first use)
 CREATE TABLE IF NOT EXISTS packgrants (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   day     TEXT NOT NULL,             -- the day whose score was cleared
-  ts      INTEGER NOT NULL
+  ts      INTEGER NOT NULL,
+  kind    TEXT NOT NULL DEFAULT 'normal'   -- normal | god (every card Rare or better, with an Ultra Rare+ guaranteed)
 );
 
 -- the shared chat room (the server also creates this table by itself on first use)

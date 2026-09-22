@@ -78,7 +78,9 @@ async function login(req, env){
 let grantsReady = false;
 async function ensureGrants(env){
   if (grantsReady) return;
-  await env.DB.prepare("CREATE TABLE IF NOT EXISTS packgrants (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, day TEXT NOT NULL, ts INTEGER NOT NULL)").run();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS packgrants (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, day TEXT NOT NULL, ts INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'normal')").run();
+  const info = await env.DB.prepare("PRAGMA table_info(packgrants)").all();   /* a server running before "god packs" needs the column added */
+  if (!info.results.some(r => r.name === "kind")) await env.DB.prepare("ALTER TABLE packgrants ADD COLUMN kind TEXT NOT NULL DEFAULT 'normal'").run();
   grantsReady = true;
 }
 
@@ -90,8 +92,8 @@ async function me(req, env){
   let grant = {id:0, day:null};
   try {
     await ensureGrants(env);
-    const g = await env.DB.prepare("SELECT id, day FROM packgrants WHERE user_id = ? ORDER BY id DESC LIMIT 1").bind(uid).first();
-    if (g) grant = {id:g.id, day:g.day};
+    const g = await env.DB.prepare("SELECT id, day, kind FROM packgrants WHERE user_id = ? ORDER BY id DESC LIMIT 1").bind(uid).first();
+    if (g) grant = {id:g.id, day:g.day, kind:g.kind || "normal"};
   } catch {}   /* never let this stop a login check */
   return json({user:{id:row.id, display:row.display, admin:isAdminKey(env, row.key)}, grant});
 }
@@ -470,8 +472,9 @@ async function adminChatClear(req, env){
 }
 
 /* gives a player a new pack: their latest score (from today or yesterday) is removed from the leaderboard and a grant is
-   recorded, so the game deals them a fresh pack that counts. */
-async function adminNewPack(req, env){
+   recorded, so the game deals them a fresh pack that counts. A "god" pack is the same grant, but tells the game to deal
+   a pack where every card is Rare or better (with an Ultra Rare or better guaranteed) instead of the usual random one. */
+async function grantPack(req, env, kind){
   if (!await requireAdmin(req, env)) return fail(403, "forbidden", "Admins only.");
   const {name} = await readBody(req), target = await findUser(env, name);
   if (!target) return fail(404, "nouser", "No player with that name.");
@@ -480,9 +483,11 @@ async function adminNewPack(req, env){
   const last = await env.DB.prepare("SELECT day FROM scores WHERE user_id = ? ORDER BY day DESC LIMIT 1").bind(target.id).first();
   const day = last && Math.abs(Date.parse(last.day) - Date.parse(today)) <= 864e5 ? last.day : today;
   const r = await env.DB.prepare("DELETE FROM scores WHERE user_id = ? AND day = ?").bind(target.id, day).run();
-  await env.DB.prepare("INSERT INTO packgrants (user_id, day, ts) VALUES (?, ?, ?)").bind(target.id, day, Date.now()).run();
+  await env.DB.prepare("INSERT INTO packgrants (user_id, day, ts, kind) VALUES (?, ?, ?, ?)").bind(target.id, day, Date.now(), kind).run();
   return json({ok:true, removed:r.meta.changes, day});
 }
+const adminNewPack = (req, env) => grantPack(req, env, "normal");
+const adminGodPack = (req, env) => grantPack(req, env, "god");
 
 export default {
   async fetch(req, env){
@@ -499,6 +504,7 @@ export default {
       if (req.method === "POST" && path === "/api/admin/delete") return await adminDelete(req, env);
       if (req.method === "POST" && path === "/api/admin/clearscore") return await adminClearScore(req, env);
       if (req.method === "POST" && path === "/api/admin/newpack") return await adminNewPack(req, env);
+      if (req.method === "POST" && path === "/api/admin/godpack") return await adminGodPack(req, env);
       if (req.method === "GET" && path === "/api/chat") return await chatList(req, env);
       if (req.method === "POST" && path === "/api/chat") return await chatSend(req, env);
       if (req.method === "POST" && path === "/api/admin/chat/delete") return await adminChatDelete(req, env);

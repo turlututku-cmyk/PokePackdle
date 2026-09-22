@@ -415,6 +415,8 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
 .btn.sm.ghost{box-shadow:none}
 .btn.danger{color:#ff8f8f; border-color:#ff8f8f55}
 .btn.danger-fill{background:#ff6b6b; color:#2b0606; box-shadow:0 4px 0 #b53a3a}
+.btn.god{color:#ffd23f; border-color:#ffd23f66}
+.acts button.god{color:#ffd23f; border-color:#ffd23f66}
 .pager{display:flex; align-items:center; justify-content:center; gap:14px; margin-top:12px; font:600 12px var(--mono); color:var(--muted)}
 .pager[hidden]{display:none}
 .pager button:disabled{opacity:.4; cursor:default}
@@ -549,6 +551,7 @@ dialog.wide{width:min(720px,calc(100vw - 32px)); max-height:calc(100vh - 32px); 
     <div class="lbl" style="margin-top:22px">Tools</div>
     <div class="adm-row">
       <button type="button" class="btn sm ghost" id="admResetMine">Deal me a new pack</button>
+      <button type="button" class="btn sm ghost god" id="admGodMine">Deal me a God pack</button>
       <button type="button" class="btn sm ghost" id="admExport">Copy all data (JSON)</button>
       <button type="button" class="btn sm ghost danger" id="admWipe">Wipe all game data</button>
     </div>
@@ -715,6 +718,26 @@ function rollCard(r){
   return c;
 }
 const genRun = seed => { const r = mulberry32(seed); return Array.from({length:PACKS}, () => Array.from({length:PER}, () => rollCard(r))); };
+
+/* a "god pack": every card is Holo Rare or better, with at least one Secret Rare or better guaranteed. Given out by an
+   admin, or (rarely) dealt naturally: every daily pack has a GOD_PACK_ODDS chance of being one. */
+const GOD_PACK_ODDS = 0.001;
+function rollFromTier(r, minT){
+  const pool = RAR.slice(minT), w = pool.reduce((a, x) => a + x.w, 0);
+  let x = r() * w, t = minT;
+  for (; t < RAR.length - 1; t++) { x -= RAR[t].w; if (x < 0) break; }
+  const p = POOLS[t], id = p[Math.floor(r() * p.length)], shiny = r() < SHINY_ODDS;
+  const c = {t, id, shiny}; c.pts = scoreCard(c).total; return c;
+}
+function genGodPack(seed){
+  const r = mulberry32(seed);
+  const cards = Array.from({length:PER}, () => rollFromTier(r, 3));
+  if (!cards.some(c => c.t >= 5)) {
+    let worst = 0; for (let i = 1; i < cards.length; i++) if (cards[i].t < cards[worst].t) worst = i;
+    cards[worst] = rollFromTier(r, 5);
+  }
+  return [cards];
+}
 
 /* ---------- badges: bonus points for what a whole pack looks like ---------- */
 const GEN_END = [151,251,386,493,649,721,809,905,1025];
@@ -908,8 +931,12 @@ const artUrl = (id, shiny) => "https://raw.githubusercontent.com/PokeAPI/sprites
 const fresh = () => ({pack:0, ripped:false, flipped:Array(PER).fill(false), counted:false});
 const todayKey = () => keyOf(new Date());
 let mode = "daily";   /* "daily": one saved pack a day that counts. "free": unlimited practice packs that never count. */
-let seed = 0, run = [], st = fresh(), runDay = todayKey();
-const persist = () => { if (mode === "daily") store.set(K("run"), {seed, st, day:runDay}); };
+let seed = 0, run = [], st = fresh(), runDay = todayKey(), runGod = false;
+const persist = () => { if (mode === "daily") store.set(K("run"), {seed, st, day:runDay, god:runGod}); };
+
+/* saved per account (so it works even for an account that isn't the one currently logged in), and consumed the next
+   time that account's pack is freshly dealt, to mark it a god pack (an admin grant) */
+const setGodPending = u => store.set(u === user ? K("godPending") : "packdle:u:" + u + ":godPending", true);
 
 /* One random pack per account per day. The current run is saved, so refreshing can't reroll cards you've already seen. */
 function startRun(newRun){
@@ -918,9 +945,14 @@ function startRun(newRun){
   const ok = saved && saved.st && Number.isFinite(saved.seed);
   const inProgress = ok && saved.st.ripped && saved.st.pack < PACKS;        /* an opened, unfinished pack always carries on, even past midnight */
   const doneToday = ok && saved.st.pack >= PACKS && saved.day === today;    /* today's pack is used up until the next day */
-  if (inProgress || doneToday) { seed = saved.seed; st = saved.st; runDay = saved.day || today; }
-  else { seed = (Math.random() * 2**32) >>> 0; st = fresh(); runDay = today; }   /* an untouched sealed pack is simply replaced by a new random one */
-  run = genRun(seed);
+  if (inProgress || doneToday) { seed = saved.seed; st = saved.st; runDay = saved.day || today; runGod = !!saved.god; }
+  else {
+    seed = (Math.random() * 2**32) >>> 0; st = fresh(); runDay = today;
+    runGod = !!store.get(K("godPending"), false);
+    if (runGod) localStorage.removeItem(K("godPending"));
+    else runGod = Math.random() < GOD_PACK_ODDS;   /* a tiny natural chance too, on top of any admin grant */
+  }   /* an untouched sealed pack is simply replaced by a new random one */
+  run = runGod ? genGodPack(seed) : genRun(seed);
   persist();
   setMode();
 }
@@ -1060,10 +1092,10 @@ function revealBadges(){
   else if (!got.length) toast("No badges this time.");
 }
 function renderPackView(){
+  /* a god pack looks exactly like an ordinary pack until it's opened — the surprise is what's inside, not a label on the wrapper */
   const s = SETS[st.pack % SETS.length], p = $("#pack");
   p.classList.remove("ripping");
-  p.style.setProperty("--p1", s.a); p.style.setProperty("--p2", s.b);
-  $("#pset").textContent = s.n;
+  p.style.setProperty("--p1", s.a); p.style.setProperty("--p2", s.b); $("#pset").textContent = s.n;
   $("#pnum").textContent = (PACKS > 1 ? "PACK " + (st.pack+1) + " OF " + PACKS + " · " : "") + PER + " CARDS";
   attachPack(st.pack);   /* fetch this pack's moves now, so they're ready when it's ripped */
 }
@@ -1855,7 +1887,7 @@ async function renderAdminCloud(){
     ? "<tr><th>Player</th><th>Created</th><th>Today</th><th>Best</th><th>Days</th><th>Actions</th></tr>" + rows.map(u =>
         "<tr><td>" + esc(u.name) + (u.admin ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(u.created || 0).toLocaleDateString() +
         '</td><td class="n">' + (u.today == null ? "—" : fmt(u.today)) + '</td><td class="n">' + (u.best == null ? "—" : fmt(u.best)) + '</td><td class="n">' + u.days + '</td><td><span class="acts">' +
-        '<button data-act="newpack" data-u="' + esc(u.name) + '">New pack</button><button data-act="pw" data-u="' + esc(u.name) + '">New password</button><button data-act="clear" data-u="' + esc(u.name) + '">Clear today</button>' +
+        '<button data-act="newpack" data-u="' + esc(u.name) + '">New pack</button><button class="god" data-act="godpack" data-u="' + esc(u.name) + '">God pack</button><button data-act="pw" data-u="' + esc(u.name) + '">New password</button><button data-act="clear" data-u="' + esc(u.name) + '">Clear today</button>' +
         (u.admin ? "" : '<button class="danger" data-act="del" data-u="' + esc(u.name) + '">Delete</button>') + "</span></td></tr>").join("")
     : "";
 }
@@ -1871,6 +1903,10 @@ async function adminActionCloud(b){
       if (!(await askConfirm("Give " + name + " a new pack? Their latest score is removed from the leaderboard and they can open another pack that counts.", "Give new pack"))) return;
       const r = await api("/api/admin/newpack", {name});
       toast(r.ok ? "Gave " + name + " a new pack. They get it next time the game checks in." : (r.data.message || "Couldn't give a new pack."));
+    } else if (act === "godpack") {
+      if (!(await askConfirm("Give " + name + " a GOD PACK? Every card in it will be Holo Rare or better, with a Secret Rare or better guaranteed. Their latest score is removed from the leaderboard.", "Give god pack"))) return;
+      const r = await api("/api/admin/godpack", {name});
+      toast(r.ok ? "Gave " + name + " a GOD PACK! They get it next time the game checks in." : (r.data.message || "Couldn't give a god pack."));
     } else if (act === "clear") {
       if (!(await askConfirm("Clear " + name + "'s score for today? It disappears from the leaderboard.", "Clear score"))) return;
       const r = await api("/api/admin/clearscore", {name, day:todayKey()});
@@ -1896,7 +1932,7 @@ function renderAdmin(){
         const status = r ? (r.pack >= PACKS ? "finished" : r.ripped ? "in progress" : "not started") : "not started";
         return "<tr><td>" + esc(all[u].display) + (ADMINS.includes(u) ? '<span class="tag">admin</span>' : "") + '</td><td class="n">' + new Date(all[u].created || 0).toLocaleDateString() +
           '</td><td class="n">' + status + '</td><td class="n">' + (best ? fmt(best) : "—") + '</td><td class="n">' + (s.played + s.freeRuns) + '</td><td><span class="acts">' +
-          '<button data-act="reset" data-u="' + esc(u) + '">New pack</button><button data-act="pw" data-u="' + esc(u) + '">New password</button>' +
+          '<button data-act="reset" data-u="' + esc(u) + '">New pack</button><button class="god" data-act="godreset" data-u="' + esc(u) + '">God pack</button><button data-act="pw" data-u="' + esc(u) + '">New password</button>' +
           (u === user ? "" : '<button class="danger" data-act="del" data-u="' + esc(u) + '">Delete</button>') + "</span></td></tr>";
       }).join("")
     : "";
@@ -1904,6 +1940,12 @@ function renderAdmin(){
 function resetRun(u){
   /* drops the account's current run so its next visit deals a fresh random pack (stats already earned stay) */
   localStorage.removeItem("packdle:u:" + u + ":run");
+  if (u === user) startRun(true);
+}
+function godRun(u){
+  /* same, but the next pack is a god pack: every card Holo Rare or better, a Secret Rare or better guaranteed */
+  localStorage.removeItem("packdle:u:" + u + ":run");
+  setGodPending(u);
   if (u === user) startRun(true);
 }
 function openAdmin(){
@@ -1946,6 +1988,7 @@ async function adminAction(e){
   const u = b.dataset.u, all = accounts(), name = all[u] && all[u].display;
   if (!name) return;
   if (b.dataset.act === "reset") { resetRun(u); toast("Dealt " + name + " a fresh pack."); }
+  else if (b.dataset.act === "godreset") { godRun(u); toast("Dealt " + name + " a GOD PACK! ★"); }
   else if (b.dataset.act === "pw") {
     const pw = await askText("New password for " + name, "New password (at least 6 characters)", 6);
     if (pw === null) return;
@@ -1966,6 +2009,7 @@ $("#admPreview").addEventListener("click", () => {
   openZoomCard({id, t, shiny});
 });
 $("#admResetMine").addEventListener("click", () => { if (!isAdmin()) return; resetRun(user); renderAdmin(); toast("Dealt you a fresh pack."); });
+$("#admGodMine").addEventListener("click", () => { if (!isAdmin()) return; godRun(user); renderAdmin(); toast("Dealt you a GOD PACK! ★"); });
 $("#admExport").addEventListener("click", async () => {
   if (!isAdmin()) return;
   const dump = {}; Object.keys(localStorage).filter(k => k.startsWith("packdle:") && k !== "packdle:bulk2").forEach(k => dump[k] = store.get(k, null));
@@ -2137,6 +2181,8 @@ async function checkGrant(){
     const cur = store.get(K("run"), null), used = cur && cur.st && cur.st.pack >= PACKS && (cur.day === g.day || cur.day === todayKey());
     if (!used) return;
     localStorage.removeItem(K("run"));
+    /* a god pack is a surprise: the player is told only that a new pack is waiting, never that it's special */
+    if (g.kind === "god") setGodPending(user);
     if (mode === "daily") { window.scrollTo(0, 0); startRun(true); }
     updateNextChip();
     toast("An admin gave you a new pack!");
