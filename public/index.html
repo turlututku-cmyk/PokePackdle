@@ -677,6 +677,11 @@ const packHp = cs => cs.reduce((a, c) => a + cardStats(c.id, c.t, dataFor(c.id))
 const typeOf = c => dataFor(c.id).ty;
 const STARTERS = new Set([1,2,3,4,5,6,7,8,9, 152,153,154,155,156,157,158,159,160, 252,253,254,255,256,257,258,259,260, 387,388,389,390,391,392,393,394,395, 495,496,497,498,499,500,501,502,503, 650,651,652,653,654,655,656,657,658, 722,723,724,725,726,727,728,729,730, 810,811,812,813,814,815,816,817,818, 906,907,908,909,910,911,912,913,914]);
 const EEVEES = new Set([133,134,135,136,196,197,470,471,700]);
+const weakOf = c => cardStats(c.id, c.t, dataFor(c.id)).weak;
+const retreatOf = c => cardStats(c.id, c.t, dataFor(c.id)).retreat;
+const atkSum = cs => cs.reduce((a, c) => { const s = cardStats(c.id, c.t, dataFor(c.id)); return a + s.a1.d + s.a2.d; }, 0);
+const isPalin = id => { const s = String(id); return s.length >= 2 && s === [...s].reverse().join(""); };
+const hasRun3 = ids => { const s = new Set(ids); return ids.some(id => s.has(id + 1) && s.has(id + 2)); };
 const BADGES = [
   {k:"bulk",    i:"📦", n:"Bulk Box",     pts:15,  d:"Every card is Common or Uncommon",                    f:cs => cs.every(c => c.t <= 1)},
   {k:"odd",     i:"🔶", n:"Odd Squad",    pts:15,  d:"7 or more cards have an odd Pokédex number",          f:cs => count(cs, c => c.id % 2 === 1) >= 7},
@@ -700,7 +705,7 @@ const BADGES = [
   {k:"party",   i:"🎨", n:"Type Party",   pts:40,  d:"8 or more different types in one pack",               f:cs => new Set(cs.map(typeOf)).size >= 8},
   {k:"chain",   i:"🌿", n:"Final Forms",  pts:50,  d:"4 or more Stage 2 cards in one pack",                 f:cs => count(cs, c => dataFor(c.id).st === "STAGE 2") >= 4},
   {k:"next",    i:"🏘️", n:"Neighbors",    pts:50,  d:"Two cards with back-to-back Pokédex numbers",         f:cs => { const s = new Set(cs.map(c => c.id)); return cs.some(c => s.has(c.id + 1)); }},
-  {k:"family",  i:"🧬", n:"Family Reunion",pts:60, d:"A Pokémon and the one it evolves from, together",     f:cs => cs.some(c => { const f = dataFor(c.id).from; return f && cs.some(o => o.id === f); })},
+  {k:"family",  i:"👨‍👩‍👧", n:"Family Reunion",pts:60, d:"A Pokémon and the one it evolves from, together",     f:cs => cs.some(c => { const f = dataFor(c.id).from; return f && cs.some(o => o.id === f); })},
   {k:"starter", i:"🌱", n:"Starter Squad",pts:60,  d:"3 or more starter Pokémon or their evolutions",       f:cs => count(cs, c => STARTERS.has(c.id)) >= 3},
   {k:"boss",    i:"🏔️", n:"Big Boss",     pts:60,  d:"One card has 300 HP or more",                         f:cs => cs.some(c => cardStats(c.id, c.t, dataFor(c.id)).hp >= 300)},
   {k:"eevee",   i:"🦊", n:"Eeveelutions", pts:100, d:"2 or more Eevee or Eeveelution cards",                f:cs => count(cs, c => EEVEES.has(c.id)) >= 2},
@@ -709,6 +714,12 @@ const BADGES = [
   {k:"twoshiny",i:"🌟", n:"Double Shiny", pts:150, d:"2 or more shiny cards in one pack",                   f:cs => count(cs, c => c.shiny) >= 2},
   {k:"crown",   i:"💠", n:"Crown Jewel",  pts:300, d:"You pulled a Crown Rare",                             f:cs => cs.some(c => c.t === 6)},
   {k:"zard",    i:"🔥", n:"Crown Charizard",pts:1000, d:"You pulled Charizard as a Crown Rare",           f:cs => cs.some(c => c.id === 6 && c.t === 6)},
+  {k:"mirror",  i:"🪞", n:"Mirror Number", pts:40,  d:"3 or more Pokédex numbers are palindromes",           f:cs => count(cs, c => isPalin(c.id)) >= 3},
+  {k:"weaksweep",i:"⚔️", n:"Weakness Sweep",pts:50, d:"6 or more cards share the same weakness",             f:cs => maxSame(cs.map(weakOf)) >= 6},
+  {k:"speedy",  i:"💨", n:"Speedster",     pts:40,  d:"6 or more cards have no retreat cost",                f:cs => count(cs, c => retreatOf(c) === 0) >= 6},
+  {k:"cannon",  i:"💥", n:"Glass Cannon",  pts:60,  d:"Your pack's combined attack damage is 1,150 or more", f:cs => atkSum(cs) >= 1150},
+  {k:"run3",    i:"🔗", n:"On a Roll",     pts:400, d:"3 cards with back-to-back Pokédex numbers",           f:cs => hasRun3(cs.map(c => c.id))},
+  {k:"round",   i:"🔢", n:"Round Number",  pts:120, d:"Your card points add up to a multiple of 100",        f:cs => cs.reduce((a, c) => a + c.pts, 0) % 100 === 0},
 ];
 const bTier = pts => pts <= 20 ? 0 : pts <= 40 ? 1 : pts <= 75 ? 2 : pts <= 200 ? 4 : 6;
 const badgesFor = cs => BADGES.filter(b => b.f(cs));
