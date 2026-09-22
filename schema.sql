@@ -33,3 +33,28 @@ CREATE TABLE IF NOT EXISTS chat (
   text    TEXT NOT NULL,
   ts      INTEGER NOT NULL
 );
+
+-- every card from a counted daily pack (the server also creates this table by itself on first use)
+CREATE TABLE IF NOT EXISTS cards (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL,
+  poke_id     INTEGER NOT NULL,
+  tier        INTEGER NOT NULL,
+  shiny       INTEGER NOT NULL,
+  ts          INTEGER NOT NULL,
+  in_trade_id INTEGER             -- set while the card is offered in an open trade
+);
+
+-- trades between two players (the server also creates this table by itself on first use)
+CREATE TABLE IF NOT EXISTS trades (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_user  INTEGER NOT NULL,
+  to_user    INTEGER NOT NULL,
+  status     TEXT NOT NULL,        -- pending | open | completed | declined | cancelled
+  from_ready INTEGER NOT NULL DEFAULT 0,
+  to_ready   INTEGER NOT NULL DEFAULT 0,
+  created    INTEGER NOT NULL,
+  updated    INTEGER NOT NULL
+);
+
+-- users.best_pts and users.best_name (a player's best pull, for their profile) are added automatically on first use too
