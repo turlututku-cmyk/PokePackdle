@@ -1903,10 +1903,12 @@ async function adminActionCloud(b){
       if (!(await askConfirm("Give " + name + " a new pack? Their latest score is removed from the leaderboard and they can open another pack that counts.", "Give new pack"))) return;
       const r = await api("/api/admin/newpack", {name});
       toast(r.ok ? "Gave " + name + " a new pack. They get it next time the game checks in." : (r.data.message || "Couldn't give a new pack."));
+      if (r.ok && name.toLowerCase() === user) checkGrant();   /* giving it to yourself: no need to wait for the next check */
     } else if (act === "godpack") {
       if (!(await askConfirm("Give " + name + " a GOD PACK? Every card in it will be Holo Rare or better, with a Secret Rare or better guaranteed. Their latest score is removed from the leaderboard.", "Give god pack"))) return;
       const r = await api("/api/admin/godpack", {name});
       toast(r.ok ? "Gave " + name + " a GOD PACK! They get it next time the game checks in." : (r.data.message || "Couldn't give a god pack."));
+      if (r.ok && name.toLowerCase() === user) checkGrant();
     } else if (act === "clear") {
       if (!(await askConfirm("Clear " + name + "'s score for today? It disappears from the leaderboard.", "Clear score"))) return;
       const r = await api("/api/admin/clearscore", {name, day:todayKey()});
@@ -2178,11 +2180,15 @@ async function checkGrant(){
     const g = r.data.grant, seen = store.get(K("grantSeen"), 0) || 0;
     if (g.id <= seen) return;
     store.set(K("grantSeen"), g.id);
-    const cur = store.get(K("run"), null), used = cur && cur.st && cur.st.pack >= PACKS && (cur.day === g.day || cur.day === todayKey());
-    if (!used) return;
+    const cur = store.get(K("run"), null), god = g.kind === "god";
+    const finished = cur && cur.st && cur.st.pack >= PACKS && (cur.day === g.day || cur.day === todayKey());   /* today's pack is used up */
+    const opening = cur && cur.st && cur.st.ripped && cur.st.pack < PACKS;                                      /* partway through opening it */
+    /* a normal grant replaces a pack that's used up. A god grant also replaces one that hasn't been opened yet (or none saved
+       at all), so it isn't wasted; if the pack is partway open it waits for the next pack that's dealt. */
+    if (!(finished || (god && !opening))) { if (god) setGodPending(user); return; }
     localStorage.removeItem(K("run"));
     /* a god pack is a surprise: the player is told only that a new pack is waiting, never that it's special */
-    if (g.kind === "god") setGodPending(user);
+    if (god) setGodPending(user);
     if (mode === "daily") { window.scrollTo(0, 0); startRun(true); }
     updateNextChip();
     toast("An admin gave you a new pack!");
